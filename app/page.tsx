@@ -4,17 +4,27 @@ import { useState } from "react";
 
 export default function Home() {
   const [phone, setPhone] = useState("");
-  const [showOtp, setShowOtp] = useState(false);
   const [otp, setOtp] = useState("");
+  const [screen, setScreen] = useState<"phone" | "otp" | "profile">("phone");
+
+  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const [bio, setBio] = useState("");
 
   function sendOtp() {
     if (!phone.trim()) return;
-    setShowOtp(true);
+    setScreen("otp");
   }
 
   function verifyOtp() {
     if (otp.length !== 6) return;
-    alert("Welcome to Social freeText!");
+    setScreen("profile");
+  }
+
+  function createProfile() {
+    if (!name.trim() || !username.trim()) return;
+
+    alert(`Welcome to Social freeText, ${name}!`);
   }
 
   return (
@@ -36,10 +46,11 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Login Card */}
+        {/* Card */}
         <div className="bg-white rounded-3xl shadow-xl p-6">
 
-          {!showOtp ? (
+          {/* PHONE SCREEN */}
+          {screen === "phone" && (
             <>
               <h2 className="text-2xl font-bold mb-2">
                 Create your account
@@ -69,16 +80,15 @@ export default function Home() {
 
               <button
                 onClick={sendOtp}
-                className="w-full mt-6 bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700"
+                className="w-full mt-6 bg-blue-600 text-white py-3 rounded-xl font-semibold"
               >
                 Send verification code
               </button>
-
-              <p className="text-xs text-gray-400 text-center mt-5">
-                By continuing, you agree to our Terms and Privacy Policy.
-              </p>
             </>
-          ) : (
+          )}
+
+          {/* OTP SCREEN */}
+          {screen === "otp" && (
             <>
               <h2 className="text-2xl font-bold mb-2">
                 Verify your number
@@ -97,18 +107,18 @@ export default function Home() {
                   setOtp(e.target.value.replace(/\D/g, ""))
                 }
                 placeholder="000000"
-                className="w-full bg-gray-100 rounded-xl px-4 py-4 text-center text-2xl tracking-[0.5em] outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-gray-100 rounded-xl px-4 py-4 text-center text-2xl tracking-[0.5em] outline-none"
               />
 
               <button
                 onClick={verifyOtp}
-                className="w-full mt-6 bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700"
+                className="w-full mt-6 bg-blue-600 text-white py-3 rounded-xl font-semibold"
               >
                 Verify & Continue
               </button>
 
               <button
-                onClick={() => setShowOtp(false)}
+                onClick={() => setScreen("phone")}
                 className="w-full mt-3 text-blue-600 py-2"
               >
                 Change phone number
@@ -116,11 +126,72 @@ export default function Home() {
             </>
           )}
 
+          {/* PROFILE SCREEN */}
+          {screen === "profile" && (
+            <>
+              <h2 className="text-2xl font-bold mb-2">
+                Create your profile
+              </h2>
+
+              <p className="text-gray-500 mb-6">
+                Tell people a little about yourself.
+              </p>
+
+              {/* Profile photo */}
+              <div className="flex justify-center mb-6">
+                <div className="w-24 h-24 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-3xl font-bold">
+                  +
+                </div>
+              </div>
+
+              <label className="text-sm font-semibold">
+                Full name
+              </label>
+
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Your name"
+                className="w-full mt-2 mb-4 bg-gray-100 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
+              />
+
+              <label className="text-sm font-semibold">
+                Username
+              </label>
+
+              <input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="@username"
+                className="w-full mt-2 mb-4 bg-gray-100 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
+              />
+
+              <label className="text-sm font-semibold">
+                Bio
+              </label>
+
+              <textarea
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                placeholder="Tell people about yourself..."
+                rows={3}
+                className="w-full mt-2 bg-gray-100 rounded-xl px-4 py-3 outline-none resize-none focus:ring-2 focus:ring-blue-500"
+              />
+
+              <button
+                onClick={createProfile}
+                className="w-full mt-6 bg-blue-600 text-white py-3 rounded-xl font-semibold"
+              >
+                Create Profile
+              </button>
+            </>
+          )}
+
         </div>
 
-        {/* AI */}
         <div className="text-center mt-6 text-sm text-gray-500">
-          Powered by <span className="font-semibold text-blue-600">
+          Powered by{" "}
+          <span className="font-semibold text-blue-600">
             Boi AchiverAI
           </span>
         </div>
