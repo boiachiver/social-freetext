@@ -66,9 +66,7 @@ export default function Home() {
   ) {
     const file = event.target.files?.[0];
 
-    if (!file) {
-      return;
-    }
+    if (!file) return;
 
     if (!file.type.startsWith("image/")) {
       alert("Please select an image.");
@@ -110,7 +108,8 @@ export default function Home() {
 
   function changeCountry(value: string) {
     const selected = countries.find(
-      (item, index) => `${item.code}-${index}` === value
+      (item, index) =>
+        `${item.code}-${index}` === value
     );
 
     if (selected) {
@@ -125,30 +124,55 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+    <main className="
+      min-h-screen
+      bg-gray-100
+      flex
+      items-center
+      justify-center
+      p-4
+    ">
 
       <div className="w-full max-w-md">
 
         {/* ========================================
-            HEADER / LOGO
+            PREMIUM SOCIAL FREETEXT LOGO
             ======================================== */}
 
-        <div className="text-center mb-8">
+        <div className="text-center mb-10">
 
           <div className="sf-logo">
+
+            {/* Rotating rings */}
+            <div className="sf-ring"></div>
+
+            <div className="sf-ring-two"></div>
+
+            {/* Moving glass shine */}
             <div className="sf-shine"></div>
 
+            {/* Main SF identity */}
             <span>SF</span>
+
           </div>
 
-          <h1 className="text-3xl font-bold mt-7">
+          <h1 className="
+            text-3xl
+            font-bold
+            mt-9
+            tracking-tight
+          ">
             Social{" "}
             <span className="text-blue-600">
               freeText
             </span>
           </h1>
 
-          <p className="text-gray-500 mt-2">
+          <p className="
+            text-gray-500
+            mt-2
+            text-sm
+          ">
             Connect. Chat. Share.
           </p>
 
@@ -158,7 +182,12 @@ export default function Home() {
             MAIN CARD
             ======================================== */}
 
-        <div className="bg-white rounded-3xl shadow-xl p-6">
+        <div className="
+          bg-white
+          rounded-3xl
+          shadow-xl
+          p-6
+        ">
 
           {/* ======================================
               PHONE SCREEN
@@ -167,11 +196,18 @@ export default function Home() {
           {screen === "phone" && (
             <>
 
-              <h2 className="text-2xl font-bold mb-2">
+              <h2 className="
+                text-2xl
+                font-bold
+                mb-2
+              ">
                 Create your account
               </h2>
 
-              <p className="text-gray-500 mb-6">
+              <p className="
+                text-gray-500
+                mb-6
+              ">
                 Enter your phone number to get started.
               </p>
 
@@ -217,7 +253,7 @@ export default function Home() {
 
               </select>
 
-              {/* PHONE */}
+              {/* PHONE NUMBER */}
 
               <label
                 htmlFor="phone"
@@ -226,7 +262,11 @@ export default function Home() {
                 Phone number
               </label>
 
-              <div className="flex gap-2 mt-2">
+              <div className="
+                flex
+                gap-2
+                mt-2
+              ">
 
                 <div className="
                   bg-gray-100
@@ -267,7 +307,7 @@ export default function Home() {
 
               </div>
 
-              {/* SEND OTP */}
+              {/* SEND CODE */}
 
               <button
                 type="button"
@@ -283,6 +323,8 @@ export default function Home() {
                   hover:bg-blue-700
                   active:scale-[0.98]
                   transition
+                  shadow-lg
+                  shadow-blue-200
                 "
               >
                 Send verification code
@@ -298,11 +340,18 @@ export default function Home() {
           {screen === "otp" && (
             <>
 
-              <h2 className="text-2xl font-bold mb-2">
+              <h2 className="
+                text-2xl
+                font-bold
+                mb-2
+              ">
                 Verify your number
               </h2>
 
-              <p className="text-gray-500 mb-6">
+              <p className="
+                text-gray-500
+                mb-6
+              ">
                 Enter the 6-digit code sent to:
               </p>
 
@@ -355,8 +404,6 @@ export default function Home() {
                 "
               />
 
-              {/* VERIFY */}
-
               <button
                 type="button"
                 onClick={verifyOtp}
@@ -371,12 +418,12 @@ export default function Home() {
                   hover:bg-blue-700
                   active:scale-[0.98]
                   transition
+                  shadow-lg
+                  shadow-blue-200
                 "
               >
                 Verify & Continue
               </button>
-
-              {/* CHANGE NUMBER */}
 
               <button
                 type="button"
@@ -402,19 +449,33 @@ export default function Home() {
           {screen === "profile" && (
             <>
 
-              <h2 className="text-2xl font-bold mb-2">
+              <h2 className="
+                text-2xl
+                font-bold
+                mb-2
+              ">
                 Create your profile
               </h2>
 
-              <p className="text-gray-500 mb-6">
+              <p className="
+                text-gray-500
+                mb-6
+              ">
                 Tell people a little about yourself.
               </p>
 
               {/* PROFILE PHOTO */}
 
-              <div className="flex justify-center mb-3">
+              <div className="
+                flex
+                justify-center
+                mb-3
+              ">
 
-                <label className="relative cursor-pointer">
+                <label className="
+                  relative
+                  cursor-pointer
+                ">
 
                   {profilePhoto ? (
 
@@ -618,6 +679,8 @@ export default function Home() {
                   hover:bg-blue-700
                   active:scale-[0.98]
                   transition
+                  shadow-lg
+                  shadow-blue-200
                 "
               >
                 Create Profile
@@ -629,7 +692,7 @@ export default function Home() {
         </div>
 
         {/* ========================================
-            AI BRANDING
+            BOI ACHIVERAi BRANDING
             ======================================== */}
 
         <div className="
