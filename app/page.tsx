@@ -1,6 +1,14 @@
 "use client";
 
-import { ChangeEvent, useState } from "react";
+import { ChangeEvent, useEffect, useState } from "react";
+
+import {
+  ConfirmationResult,
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+} from "firebase/auth";
+
+import { auth } from "../lib/firebase";
 
 const countries = [
   { name: "Nigeria", code: "+234", flag: "🇳🇬" },
@@ -27,13 +35,32 @@ const countries = [
 
 type Screen = "phone" | "otp" | "profile";
 
+declare global {
+  interface Window {
+    recaptchaVerifier?: RecaptchaVerifier;
+  }
+}
+
 export default function Home() {
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
 
-  const [screen, setScreen] = useState<Screen>("phone");
+  const [screen, setScreen] =
+    useState<Screen>("phone");
 
-  const [country, setCountry] = useState(countries[0]);
+  const [country, setCountry] =
+    useState(countries[0]);
+
+  const [confirmationResult, setConfirmationResult] =
+    useState<ConfirmationResult | null>(null);
+
+  const [loading, setLoading] = useState(false);
+
+  const [resendLoading, setResendLoading] =
+    useState(false);
+
+  const [resendSeconds, setResendSeconds] =
+    useState(0);
 
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
@@ -42,24 +69,215 @@ export default function Home() {
   const [profilePhoto, setProfilePhoto] =
     useState<string | null>(null);
 
-  function sendOtp() {
+  /*
+   * ==========================================
+   * RECAPTCHA
+   * ==========================================
+   */
+
+  useEffect(() => {
+    return () => {
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = undefined;
+      }
+    };
+  }, []);
+
+  function createRecaptcha() {
+    if (window.recaptchaVerifier) {
+      return window.recaptchaVerifier;
+    }
+
+    window.recaptchaVerifier =
+      new RecaptchaVerifier(
+        auth,
+        "recaptcha-container",
+        {
+          size: "invisible",
+          callback: () => {
+            console.log("reCAPTCHA verified");
+          },
+          "expired-callback": () => {
+            console.log("reCAPTCHA expired");
+          },
+        }
+      );
+
+    return window.recaptchaVerifier;
+  }
+
+  /*
+   * ==========================================
+   * SEND FIREBASE SMS
+   * ==========================================
+   */
+
+  async function sendOtp() {
     if (phone.trim().length < 7) {
       alert("Please enter a valid phone number.");
       return;
     }
 
-    setOtp("");
-    setScreen("otp");
+    setLoading(true);
+
+    try {
+      const fullPhoneNumber =
+        `${country.code}${phone}`;
+
+      const verifier = createRecaptcha();
+
+      const result =
+        await signInWithPhoneNumber(
+          auth,
+          fullPhoneNumber,
+          verifier
+        );
+
+      setConfirmationResult(result);
+      setOtp("");
+      setScreen("otp");
+
+      setResendSeconds(60);
+
+      alert(
+        "Verification code sent successfully."
+      );
+    } catch (error: any) {
+      console.error(error);
+
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = undefined;
+      }
+
+      alert(
+        error?.message ||
+          "Unable to send verification code."
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
-  function verifyOtp() {
+  /*
+   * ==========================================
+   * VERIFY FIREBASE OTP
+   * ==========================================
+   */
+
+  async function verifyOtp() {
     if (otp.length !== 6) {
-      alert("Please enter the 6-digit verification code.");
+      alert(
+        "Please enter the 6-digit verification code."
+      );
       return;
     }
 
-    setScreen("profile");
+    if (!confirmationResult) {
+      alert(
+        "Please request a new verification code."
+      );
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await confirmationResult.confirm(otp);
+
+      setScreen("profile");
+
+      alert(
+        "Phone number verified successfully!"
+      );
+    } catch (error: any) {
+      console.error(error);
+
+      alert(
+        "Incorrect verification code. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
   }
+
+  /*
+   * ==========================================
+   * RESEND CODE
+   * ==========================================
+   */
+
+  async function resendCode() {
+    if (resendSeconds > 0) {
+      return;
+    }
+
+    setResendLoading(true);
+
+    try {
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = undefined;
+      }
+
+      const fullPhoneNumber =
+        `${country.code}${phone}`;
+
+      const verifier = createRecaptcha();
+
+      const result =
+        await signInWithPhoneNumber(
+          auth,
+          fullPhoneNumber,
+          verifier
+        );
+
+      setConfirmationResult(result);
+      setOtp("");
+      setResendSeconds(60);
+
+      alert("New verification code sent.");
+    } catch (error: any) {
+      console.error(error);
+
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = undefined;
+      }
+
+      alert(
+        error?.message ||
+          "Unable to resend verification code."
+      );
+    } finally {
+      setResendLoading(false);
+    }
+  }
+
+  /*
+   * ==========================================
+   * RESEND COUNTDOWN
+   * ==========================================
+   */
+
+  useEffect(() => {
+    if (resendSeconds <= 0) return;
+
+    const timer = setInterval(() => {
+      setResendSeconds((seconds) =>
+        seconds > 0 ? seconds - 1 : 0
+      );
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [resendSeconds]);
+
+  /*
+   * ==========================================
+   * PHOTO
+   * ==========================================
+   */
 
   function handlePhotoChange(
     event: ChangeEvent<HTMLInputElement>
@@ -74,19 +292,29 @@ export default function Home() {
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      alert("Please choose an image smaller than 5MB.");
+      alert(
+        "Please choose an image smaller than 5MB."
+      );
       return;
     }
 
-    const imageUrl = URL.createObjectURL(file);
+    const imageUrl =
+      URL.createObjectURL(file);
 
     setProfilePhoto(imageUrl);
   }
 
+  /*
+   * ==========================================
+   * CREATE PROFILE
+   * ==========================================
+   */
+
   function createProfile() {
-    const cleanUsername = username
-      .trim()
-      .replace(/^@/, "");
+    const cleanUsername =
+      username
+        .trim()
+        .replace(/^@/, "");
 
     if (!name.trim()) {
       alert("Please enter your full name.");
@@ -99,12 +327,22 @@ export default function Home() {
     }
 
     if (cleanUsername.length < 3) {
-      alert("Username must contain at least 3 characters.");
+      alert(
+        "Username must contain at least 3 characters."
+      );
       return;
     }
 
-    alert(`Welcome to Social freeText, ${name.trim()}!`);
+    alert(
+      `Welcome to Social freeText, ${name.trim()}!`
+    );
   }
+
+  /*
+   * ==========================================
+   * COUNTRY
+   * ==========================================
+   */
 
   function changeCountry(value: string) {
     const selected = countries.find(
@@ -118,100 +356,84 @@ export default function Home() {
     }
   }
 
+  /*
+   * ==========================================
+   * CHANGE NUMBER
+   * ==========================================
+   */
+
   function changePhone() {
     setOtp("");
+    setConfirmationResult(null);
     setScreen("phone");
   }
 
   return (
-    <main className="
-      min-h-screen
-      bg-gray-100
-      flex
-      items-center
-      justify-center
-      p-4
-    ">
-
+    <main
+      className="
+        min-h-screen
+        bg-gray-100
+        flex
+        items-center
+        justify-center
+        p-4
+      "
+    >
       <div className="w-full max-w-md">
 
-        {/* ========================================
-            PREMIUM SOCIAL FREETEXT LOGO
-            ======================================== */}
+        {/* LOGO */}
 
         <div className="text-center mb-10">
 
           <div className="sf-logo">
-
-            {/* Rotating rings */}
             <div className="sf-ring"></div>
-
             <div className="sf-ring-two"></div>
-
-            {/* Moving glass shine */}
             <div className="sf-shine"></div>
-
-            {/* Main SF identity */}
             <span>SF</span>
-
           </div>
 
-          <h1 className="
-            text-3xl
-            font-bold
-            mt-9
-            tracking-tight
-          ">
+          <h1
+            className="
+              text-3xl
+              font-bold
+              mt-9
+              tracking-tight
+            "
+          >
             Social{" "}
             <span className="text-blue-600">
               freeText
             </span>
           </h1>
 
-          <p className="
-            text-gray-500
-            mt-2
-            text-sm
-          ">
+          <p className="text-gray-500 mt-2 text-sm">
             Connect. Chat. Share.
           </p>
 
         </div>
 
-        {/* ========================================
-            MAIN CARD
-            ======================================== */}
+        {/* CARD */}
 
-        <div className="
-          bg-white
-          rounded-3xl
-          shadow-xl
-          p-6
-        ">
+        <div
+          className="
+            bg-white
+            rounded-3xl
+            shadow-xl
+            p-6
+          "
+        >
 
-          {/* ======================================
-              PHONE SCREEN
-              ====================================== */}
+          {/* PHONE */}
 
           {screen === "phone" && (
             <>
-
-              <h2 className="
-                text-2xl
-                font-bold
-                mb-2
-              ">
+              <h2 className="text-2xl font-bold mb-2">
                 Create your account
               </h2>
 
-              <p className="
-                text-gray-500
-                mb-6
-              ">
+              <p className="text-gray-500 mb-6">
                 Enter your phone number to get started.
               </p>
-
-              {/* COUNTRY */}
 
               <label
                 htmlFor="country"
@@ -241,19 +463,18 @@ export default function Home() {
                   focus:ring-blue-500
                 "
               >
-
-                {countries.map((item, index) => (
-                  <option
-                    key={`${item.code}-${index}`}
-                    value={`${item.code}-${index}`}
-                  >
-                    {item.flag} {item.name} ({item.code})
-                  </option>
-                ))}
-
+                {countries.map(
+                  (item, index) => (
+                    <option
+                      key={`${item.code}-${index}`}
+                      value={`${item.code}-${index}`}
+                    >
+                      {item.flag} {item.name} (
+                      {item.code})
+                    </option>
+                  )
+                )}
               </select>
-
-              {/* PHONE NUMBER */}
 
               <label
                 htmlFor="phone"
@@ -262,21 +483,19 @@ export default function Home() {
                 Phone number
               </label>
 
-              <div className="
-                flex
-                gap-2
-                mt-2
-              ">
+              <div className="flex gap-2 mt-2">
 
-                <div className="
-                  bg-gray-100
-                  rounded-xl
-                  px-4
-                  py-3
-                  font-semibold
-                  flex
-                  items-center
-                ">
+                <div
+                  className="
+                    bg-gray-100
+                    rounded-xl
+                    px-4
+                    py-3
+                    font-semibold
+                    flex
+                    items-center
+                  "
+                >
                   {country.code}
                 </div>
 
@@ -288,7 +507,10 @@ export default function Home() {
                   value={phone}
                   onChange={(e) =>
                     setPhone(
-                      e.target.value.replace(/\D/g, "")
+                      e.target.value.replace(
+                        /\D/g,
+                        ""
+                      )
                     )
                   }
                   placeholder="Phone number"
@@ -307,11 +529,10 @@ export default function Home() {
 
               </div>
 
-              {/* SEND CODE */}
-
               <button
                 type="button"
                 onClick={sendOtp}
+                disabled={loading}
                 className="
                   w-full
                   mt-6
@@ -321,51 +542,45 @@ export default function Home() {
                   rounded-xl
                   font-semibold
                   hover:bg-blue-700
-                  active:scale-[0.98]
+                  disabled:opacity-50
                   transition
                   shadow-lg
                   shadow-blue-200
                 "
               >
-                Send verification code
+                {loading
+                  ? "Sending code..."
+                  : "Send verification code"}
               </button>
-
             </>
           )}
 
-          {/* ======================================
-              OTP SCREEN
-              ====================================== */}
+          {/* OTP */}
 
           {screen === "otp" && (
             <>
-
-              <h2 className="
-                text-2xl
-                font-bold
-                mb-2
-              ">
+              <h2 className="text-2xl font-bold mb-2">
                 Verify your number
               </h2>
 
-              <p className="
-                text-gray-500
-                mb-6
-              ">
+              <p className="text-gray-500 mb-6">
                 Enter the 6-digit code sent to:
               </p>
 
-              <div className="
-                bg-blue-50
-                text-blue-700
-                rounded-xl
-                px-4
-                py-3
-                text-center
-                font-semibold
-                mb-6
-              ">
-                {country.flag} {country.code} {phone}
+              <div
+                className="
+                  bg-blue-50
+                  text-blue-700
+                  rounded-xl
+                  px-4
+                  py-3
+                  text-center
+                  font-semibold
+                  mb-6
+                "
+              >
+                {country.flag}{" "}
+                {country.code} {phone}
               </div>
 
               <label
@@ -384,7 +599,10 @@ export default function Home() {
                 value={otp}
                 onChange={(e) =>
                   setOtp(
-                    e.target.value.replace(/\D/g, "")
+                    e.target.value.replace(
+                      /\D/g,
+                      ""
+                    )
                   )
                 }
                 placeholder="000000"
@@ -407,6 +625,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={verifyOtp}
+                disabled={loading}
                 className="
                   w-full
                   mt-6
@@ -416,13 +635,35 @@ export default function Home() {
                   rounded-xl
                   font-semibold
                   hover:bg-blue-700
-                  active:scale-[0.98]
+                  disabled:opacity-50
                   transition
-                  shadow-lg
-                  shadow-blue-200
                 "
               >
-                Verify & Continue
+                {loading
+                  ? "Verifying..."
+                  : "Verify & Continue"}
+              </button>
+
+              <button
+                type="button"
+                onClick={resendCode}
+                disabled={
+                  resendSeconds > 0 ||
+                  resendLoading
+                }
+                className="
+                  w-full
+                  mt-3
+                  text-blue-600
+                  py-2
+                  disabled:text-gray-400
+                "
+              >
+                {resendLoading
+                  ? "Sending..."
+                  : resendSeconds > 0
+                  ? `Resend code in ${resendSeconds}s`
+                  : "Resend code"}
               </button>
 
               <button
@@ -430,55 +671,34 @@ export default function Home() {
                 onClick={changePhone}
                 className="
                   w-full
-                  mt-3
-                  text-blue-600
+                  mt-1
+                  text-gray-500
                   py-2
-                  hover:text-blue-800
+                  hover:text-blue-600
                 "
               >
                 Change phone number
               </button>
-
             </>
           )}
 
-          {/* ======================================
-              PROFILE SCREEN
-              ====================================== */}
+          {/* PROFILE */}
 
           {screen === "profile" && (
             <>
-
-              <h2 className="
-                text-2xl
-                font-bold
-                mb-2
-              ">
+              <h2 className="text-2xl font-bold mb-2">
                 Create your profile
               </h2>
 
-              <p className="
-                text-gray-500
-                mb-6
-              ">
+              <p className="text-gray-500 mb-6">
                 Tell people a little about yourself.
               </p>
 
-              {/* PROFILE PHOTO */}
+              <div className="flex justify-center mb-3">
 
-              <div className="
-                flex
-                justify-center
-                mb-3
-              ">
-
-                <label className="
-                  relative
-                  cursor-pointer
-                ">
+                <label className="relative cursor-pointer">
 
                   {profilePhoto ? (
-
                     <img
                       src={profilePhoto}
                       alt="Profile preview"
@@ -492,52 +712,54 @@ export default function Home() {
                         shadow-lg
                       "
                     />
-
                   ) : (
-
-                    <div className="
-                      w-28
-                      h-28
-                      rounded-full
-                      bg-blue-100
-                      text-blue-600
-                      flex
-                      items-center
-                      justify-center
-                      text-4xl
-                      font-bold
-                      border-4
-                      border-white
-                      shadow-lg
-                    ">
+                    <div
+                      className="
+                        w-28
+                        h-28
+                        rounded-full
+                        bg-blue-100
+                        text-blue-600
+                        flex
+                        items-center
+                        justify-center
+                        text-4xl
+                        font-bold
+                        border-4
+                        border-white
+                        shadow-lg
+                      "
+                    >
                       +
                     </div>
-
                   )}
 
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={handlePhotoChange}
+                    onChange={
+                      handlePhotoChange
+                    }
                     className="hidden"
                   />
 
-                  <div className="
-                    absolute
-                    bottom-0
-                    right-0
-                    w-9
-                    h-9
-                    rounded-full
-                    bg-blue-600
-                    text-white
-                    flex
-                    items-center
-                    justify-center
-                    border-4
-                    border-white
-                    shadow-md
-                  ">
+                  <div
+                    className="
+                      absolute
+                      bottom-0
+                      right-0
+                      w-9
+                      h-9
+                      rounded-full
+                      bg-blue-600
+                      text-white
+                      flex
+                      items-center
+                      justify-center
+                      border-4
+                      border-white
+                    "
+                  >
                     📷
                   </div>
 
@@ -545,16 +767,16 @@ export default function Home() {
 
               </div>
 
-              <p className="
-                text-center
-                text-sm
-                text-gray-500
-                mb-6
-              ">
+              <p
+                className="
+                  text-center
+                  text-sm
+                  text-gray-500
+                  mb-6
+                "
+              >
                 Tap the photo to upload
               </p>
-
-              {/* FULL NAME */}
 
               <label
                 htmlFor="name"
@@ -585,8 +807,6 @@ export default function Home() {
                   focus:ring-blue-500
                 "
               />
-
-              {/* USERNAME */}
 
               <label
                 htmlFor="username"
@@ -622,8 +842,6 @@ export default function Home() {
                 "
               />
 
-              {/* BIO */}
-
               <label
                 htmlFor="bio"
                 className="text-sm font-semibold"
@@ -654,16 +872,16 @@ export default function Home() {
                 "
               />
 
-              <p className="
-                text-xs
-                text-gray-400
-                text-right
-                mt-1
-              ">
+              <p
+                className="
+                  text-xs
+                  text-gray-400
+                  text-right
+                  mt-1
+                "
+              >
                 {bio.length}/160
               </p>
-
-              {/* CREATE PROFILE */}
 
               <button
                 type="button"
@@ -677,41 +895,41 @@ export default function Home() {
                   rounded-xl
                   font-semibold
                   hover:bg-blue-700
-                  active:scale-[0.98]
                   transition
-                  shadow-lg
-                  shadow-blue-200
                 "
               >
                 Create Profile
               </button>
-
             </>
           )}
-
         </div>
 
-        {/* ========================================
-            BOI ACHIVERAi BRANDING
-            ======================================== */}
+        {/* INVISIBLE RECAPTCHA */}
 
-        <div className="
-          text-center
-          mt-6
-          text-sm
-          text-gray-500
-        ">
+        <div id="recaptcha-container"></div>
+
+        {/* AI BRANDING */}
+
+        <div
+          className="
+            text-center
+            mt-6
+            text-sm
+            text-gray-500
+          "
+        >
           Powered by{" "}
-          <span className="
-            font-semibold
-            text-blue-600
-          ">
+          <span
+            className="
+              font-semibold
+              text-blue-600
+            "
+          >
             Boi AchiverAI
           </span>
         </div>
 
       </div>
-
     </main>
   );
 }
