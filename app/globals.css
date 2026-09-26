@@ -465,4 +465,39 @@ button {
 
     box-shadow:
       0 0 8px #00ffff,
-      0 
+      0 0 18px #00ffff,
+      0 0 35px #0066ff,
+      0 0 55px #ff00ff;
+  }
+
+  .sf-logo span {
+    font-size: 31px;
+  }
+
+  .sf-logo::before {
+    top: -16px;
+    right: -13px;
+    font-size: 27px;
+  }
+
+  .sf-logo::after {
+    bottom: -14px;
+    left: -12px;
+    font-size: 24px;
+  }
+}
+
+/* ========================================
+   REDUCED MOTION
+   ======================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-logo,
+  .sf-logo span,
+  .sf-logo::before,
+  .sf-logo::after,
+  .sf-logo span::after,
+  .sf-logo .sf-shine {
+    animation: none;
+  }
+}
