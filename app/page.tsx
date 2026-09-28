@@ -1,13 +1,11 @@
 "use client";
 
-import { ChangeEvent, useEffect, useState } from "react";
-
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 import {
   ConfirmationResult,
   RecaptchaVerifier,
   signInWithPhoneNumber,
 } from "firebase/auth";
-
 import { auth } from "../lib/firebase";
 
 const countries = [
@@ -35,32 +33,13 @@ const countries = [
 
 type Screen = "phone" | "otp" | "profile";
 
-declare global {
-  interface Window {
-    recaptchaVerifier?: RecaptchaVerifier;
-  }
-}
-
 export default function Home() {
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
 
-  const [screen, setScreen] =
-    useState<Screen>("phone");
+  const [screen, setScreen] = useState<Screen>("phone");
 
-  const [country, setCountry] =
-    useState(countries[0]);
-
-  const [confirmationResult, setConfirmationResult] =
-    useState<ConfirmationResult | null>(null);
-
-  const [loading, setLoading] = useState(false);
-
-  const [resendLoading, setResendLoading] =
-    useState(false);
-
-  const [resendSeconds, setResendSeconds] =
-    useState(0);
+  const [country, setCountry] = useState(countries[0]);
 
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
@@ -69,191 +48,19 @@ export default function Home() {
   const [profilePhoto, setProfilePhoto] =
     useState<string | null>(null);
 
-  /*
-   * ==========================================
-   * RECAPTCHA
-   * ==========================================
-   */
+  const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
 
-  useEffect(() => {
-    return () => {
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = undefined;
-      }
-    };
-  }, []);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
-  function createRecaptcha() {
-    if (window.recaptchaVerifier) {
-      return window.recaptchaVerifier;
-    }
+  const [resendSeconds, setResendSeconds] = useState(0);
 
-    window.recaptchaVerifier =
-      new RecaptchaVerifier(
-        auth,
-        "recaptcha-container",
-        {
-          size: "invisible",
-          callback: () => {
-            console.log("reCAPTCHA verified");
-          },
-          "expired-callback": () => {
-            console.log("reCAPTCHA expired");
-          },
-        }
-      );
+  const recaptchaVerifierRef =
+    useRef<RecaptchaVerifier | null>(null);
 
-    return window.recaptchaVerifier;
-  }
-
-  /*
-   * ==========================================
-   * SEND FIREBASE SMS
-   * ==========================================
-   */
-
-  async function sendOtp() {
-    if (phone.trim().length < 7) {
-      alert("Please enter a valid phone number.");
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const fullPhoneNumber =
-        `${country.code}${phone}`;
-
-      const verifier = createRecaptcha();
-
-      const result =
-        await signInWithPhoneNumber(
-          auth,
-          fullPhoneNumber,
-          verifier
-        );
-
-      setConfirmationResult(result);
-      setOtp("");
-      setScreen("otp");
-
-      setResendSeconds(60);
-
-      alert(
-        "Verification code sent successfully."
-      );
-    } catch (error: any) {
-      console.error(error);
-
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = undefined;
-      }
-
-      alert(
-        error?.message ||
-          "Unable to send verification code."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  /*
-   * ==========================================
-   * VERIFY FIREBASE OTP
-   * ==========================================
-   */
-
-  async function verifyOtp() {
-    if (otp.length !== 6) {
-      alert(
-        "Please enter the 6-digit verification code."
-      );
-      return;
-    }
-
-    if (!confirmationResult) {
-      alert(
-        "Please request a new verification code."
-      );
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      await confirmationResult.confirm(otp);
-
-      setScreen("profile");
-
-      alert(
-        "Phone number verified successfully!"
-      );
-    } catch (error: any) {
-      console.error(error);
-
-      alert(
-        "Incorrect verification code. Please try again."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  /*
-   * ==========================================
-   * RESEND CODE
-   * ==========================================
-   */
-
-  async function resendCode() {
-    if (resendSeconds > 0) {
-      return;
-    }
-
-    setResendLoading(true);
-
-    try {
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = undefined;
-      }
-
-      const fullPhoneNumber =
-        `${country.code}${phone}`;
-
-      const verifier = createRecaptcha();
-
-      const result =
-        await signInWithPhoneNumber(
-          auth,
-          fullPhoneNumber,
-          verifier
-        );
-
-      setConfirmationResult(result);
-      setOtp("");
-      setResendSeconds(60);
-
-      alert("New verification code sent.");
-    } catch (error: any) {
-      console.error(error);
-
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = undefined;
-      }
-
-      alert(
-        error?.message ||
-          "Unable to resend verification code."
-      );
-    } finally {
-      setResendLoading(false);
-    }
-  }
+  const confirmationResultRef =
+    useRef<ConfirmationResult | null>(null);
 
   /*
    * ==========================================
@@ -265,9 +72,7 @@ export default function Home() {
     if (resendSeconds <= 0) return;
 
     const timer = setInterval(() => {
-      setResendSeconds((seconds) =>
-        seconds > 0 ? seconds - 1 : 0
-      );
+      setResendSeconds((seconds) => seconds - 1);
     }, 1000);
 
     return () => clearInterval(timer);
@@ -275,67 +80,293 @@ export default function Home() {
 
   /*
    * ==========================================
-   * PHOTO
+   * CLEAN ERROR
    * ==========================================
    */
 
-  function handlePhotoChange(
-    event: ChangeEvent<HTMLInputElement>
-  ) {
-    const file = event.target.files?.[0];
+  function getFirebaseError(error: unknown) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error
+    ) {
+      const firebaseError = error as {
+        code?: string;
+        message?: string;
+      };
 
-    if (!file) return;
+      switch (firebaseError.code) {
+        case "auth/invalid-phone-number":
+          return "That phone number is not valid.";
 
-    if (!file.type.startsWith("image/")) {
-      alert("Please select an image.");
-      return;
+        case "auth/too-many-requests":
+          return "Too many attempts. Please wait and try again.";
+
+        case "auth/quota-exceeded":
+          return "SMS verification limit reached. Please try again later.";
+
+        case "auth/invalid-verification-code":
+          return "The verification code is incorrect.";
+
+        case "auth/code-expired":
+          return "This verification code has expired. Please request a new one.";
+
+        case "auth/captcha-check-failed":
+          return "reCAPTCHA verification failed. Please try again.";
+
+        case "auth/network-request-failed":
+          return "Network error. Please check your internet connection.";
+
+        case "auth/missing-phone-number":
+          return "Please enter your phone number.";
+
+        default:
+          return firebaseError.message || "Something went wrong. Please try again.";
+      }
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      alert(
-        "Please choose an image smaller than 5MB."
-      );
-      return;
-    }
-
-    const imageUrl =
-      URL.createObjectURL(file);
-
-    setProfilePhoto(imageUrl);
+    return "Something went wrong. Please try again.";
   }
 
   /*
    * ==========================================
-   * CREATE PROFILE
+   * CREATE RECAPTCHA
    * ==========================================
    */
 
-  function createProfile() {
-    const cleanUsername =
-      username
-        .trim()
-        .replace(/^@/, "");
+  function createRecaptcha() {
+    if (recaptchaVerifierRef.current) {
+      return recaptchaVerifierRef.current;
+    }
 
-    if (!name.trim()) {
-      alert("Please enter your full name.");
+    const verifier = new RecaptchaVerifier(
+      auth,
+      "recaptcha-container",
+      {
+        size: "invisible",
+
+        callback: () => {
+          // reCAPTCHA completed.
+        },
+
+        "expired-callback": () => {
+          setError(
+            "reCAPTCHA expired. Please try again."
+          );
+        },
+      }
+    );
+
+    recaptchaVerifierRef.current = verifier;
+
+    return verifier;
+  }
+
+  /*
+   * ==========================================
+   * SEND OTP
+   * ==========================================
+   */
+
+  async function sendOtp() {
+    if (phone.trim().length < 7) {
+      setError("Please enter a valid phone number.");
       return;
     }
 
-    if (!cleanUsername) {
-      alert("Please enter a username.");
-      return;
-    }
+    setLoading(true);
+    setError("");
+    setMessage("");
 
-    if (cleanUsername.length < 3) {
-      alert(
-        "Username must contain at least 3 characters."
+    try {
+      const fullPhoneNumber =
+        `${country.code}${phone}`;
+
+      const appVerifier = createRecaptcha();
+
+      const confirmationResult =
+        await signInWithPhoneNumber(
+          auth,
+          fullPhoneNumber,
+          appVerifier
+        );
+
+      confirmationResultRef.current =
+        confirmationResult;
+
+      setOtp("");
+      setScreen("otp");
+
+      setResendSeconds(60);
+
+      setMessage(
+        `Verification code sent to ${country.code} ${phone}`
+      );
+    } catch (error) {
+      console.error(error);
+
+      setError(getFirebaseError(error));
+
+      /*
+       * Firebase recommends resetting/clearing
+       * the reCAPTCHA after a failed request.
+       */
+
+      try {
+        recaptchaVerifierRef.current?.clear();
+      } catch {
+        // Ignore cleanup errors.
+      }
+
+      recaptchaVerifierRef.current = null;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /*
+   * ==========================================
+   * VERIFY OTP
+   * ==========================================
+   */
+
+  async function verifyOtp() {
+    if (otp.length !== 6) {
+      setError(
+        "Please enter the 6-digit verification code."
       );
       return;
     }
 
-    alert(
-      `Welcome to Social freeText, ${name.trim()}!`
-    );
+    if (!confirmationResultRef.current) {
+      setError(
+        "Your verification session has expired. Please request a new code."
+      );
+      setScreen("phone");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const result =
+        await confirmationResultRef.current.confirm(
+          otp
+        );
+
+      console.log(
+        "Firebase authenticated user:",
+        result.user.uid
+      );
+
+      setScreen("profile");
+
+      setMessage(
+        "Phone number verified successfully!"
+      );
+    } catch (error) {
+      console.error(error);
+
+      setError(getFirebaseError(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /*
+   * ==========================================
+   * RESEND OTP
+   * ==========================================
+   */
+
+  async function resendOtp() {
+    if (resendSeconds > 0 || resendLoading) {
+      return;
+    }
+
+    setResendLoading(true);
+    setError("");
+    setMessage("");
+
+    try {
+      /*
+       * Destroy the old reCAPTCHA so Firebase
+       * can create a fresh verification attempt.
+       */
+
+      if (recaptchaVerifierRef.current) {
+        try {
+          recaptchaVerifierRef.current.clear();
+        } catch {
+          // Ignore cleanup errors.
+        }
+
+        recaptchaVerifierRef.current = null;
+      }
+
+      const fullPhoneNumber =
+        `${country.code}${phone}`;
+
+      const appVerifier = createRecaptcha();
+
+      const confirmationResult =
+        await signInWithPhoneNumber(
+          auth,
+          fullPhoneNumber,
+          appVerifier
+        );
+
+      confirmationResultRef.current =
+        confirmationResult;
+
+      setOtp("");
+      setResendSeconds(60);
+
+      setMessage("A new verification code was sent.");
+    } catch (error) {
+      console.error(error);
+
+      setError(getFirebaseError(error));
+
+      try {
+        recaptchaVerifierRef.current?.clear();
+      } catch {
+        // Ignore cleanup errors.
+      }
+
+      recaptchaVerifierRef.current = null;
+    } finally {
+      setResendLoading(false);
+    }
+  }
+
+  /*
+   * ==========================================
+   * CHANGE PHONE
+   * ==========================================
+   */
+
+  function changePhone() {
+    setOtp("");
+    setError("");
+    setMessage("");
+    setResendSeconds(0);
+
+    confirmationResultRef.current = null;
+
+    if (recaptchaVerifierRef.current) {
+      try {
+        recaptchaVerifierRef.current.clear();
+      } catch {
+        // Ignore cleanup errors.
+      }
+
+      recaptchaVerifierRef.current = null;
+    }
+
+    setScreen("phone");
   }
 
   /*
@@ -353,19 +384,73 @@ export default function Home() {
     if (selected) {
       setCountry(selected);
       setPhone("");
+      setError("");
     }
   }
 
   /*
    * ==========================================
-   * CHANGE NUMBER
+   * PROFILE PHOTO
    * ==========================================
    */
 
-  function changePhone() {
-    setOtp("");
-    setConfirmationResult(null);
-    setScreen("phone");
+  function handlePhotoChange(
+    event: ChangeEvent<HTMLInputElement>
+  ) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please select an image.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError(
+        "Please choose an image smaller than 5MB."
+      );
+      return;
+    }
+
+    const imageUrl =
+      URL.createObjectURL(file);
+
+    setProfilePhoto(imageUrl);
+    setError("");
+  }
+
+  /*
+   * ==========================================
+   * CREATE PROFILE
+   * ==========================================
+   */
+
+  function createProfile() {
+    const cleanUsername = username
+      .trim()
+      .replace(/^@/, "");
+
+    if (!name.trim()) {
+      setError("Please enter your full name.");
+      return;
+    }
+
+    if (!cleanUsername) {
+      setError("Please enter a username.");
+      return;
+    }
+
+    if (cleanUsername.length < 3) {
+      setError(
+        "Username must contain at least 3 characters."
+      );
+      return;
+    }
+
+    alert(
+      `Welcome to Social freeText, ${name.trim()}!`
+    );
   }
 
   return (
@@ -381,15 +466,22 @@ export default function Home() {
     >
       <div className="w-full max-w-md">
 
-        {/* LOGO */}
+        {/* ========================================
+            LOGO
+            ======================================== */}
 
         <div className="text-center mb-10">
 
           <div className="sf-logo">
+
             <div className="sf-ring"></div>
+
             <div className="sf-ring-two"></div>
+
             <div className="sf-shine"></div>
+
             <span>SF</span>
+
           </div>
 
           <h1
@@ -406,13 +498,21 @@ export default function Home() {
             </span>
           </h1>
 
-          <p className="text-gray-500 mt-2 text-sm">
+          <p
+            className="
+              text-gray-500
+              mt-2
+              text-sm
+            "
+          >
             Connect. Chat. Share.
           </p>
 
         </div>
 
-        {/* CARD */}
+        {/* ========================================
+            MAIN CARD
+            ======================================== */}
 
         <div
           className="
@@ -423,15 +523,28 @@ export default function Home() {
           "
         >
 
-          {/* PHONE */}
+          {/* ======================================
+              PHONE SCREEN
+              ====================================== */}
 
           {screen === "phone" && (
             <>
-              <h2 className="text-2xl font-bold mb-2">
+              <h2
+                className="
+                  text-2xl
+                  font-bold
+                  mb-2
+                "
+              >
                 Create your account
               </h2>
 
-              <p className="text-gray-500 mb-6">
+              <p
+                className="
+                  text-gray-500
+                  mb-6
+                "
+              >
                 Enter your phone number to get started.
               </p>
 
@@ -463,17 +576,14 @@ export default function Home() {
                   focus:ring-blue-500
                 "
               >
-                {countries.map(
-                  (item, index) => (
-                    <option
-                      key={`${item.code}-${index}`}
-                      value={`${item.code}-${index}`}
-                    >
-                      {item.flag} {item.name} (
-                      {item.code})
-                    </option>
-                  )
-                )}
+                {countries.map((item, index) => (
+                  <option
+                    key={`${item.code}-${index}`}
+                    value={`${item.code}-${index}`}
+                  >
+                    {item.flag} {item.name} ({item.code})
+                  </option>
+                ))}
               </select>
 
               <label
@@ -483,8 +593,13 @@ export default function Home() {
                 Phone number
               </label>
 
-              <div className="flex gap-2 mt-2">
-
+              <div
+                className="
+                  flex
+                  gap-2
+                  mt-2
+                "
+              >
                 <div
                   className="
                     bg-gray-100
@@ -507,10 +622,7 @@ export default function Home() {
                   value={phone}
                   onChange={(e) =>
                     setPhone(
-                      e.target.value.replace(
-                        /\D/g,
-                        ""
-                      )
+                      e.target.value.replace(/\D/g, "")
                     )
                   }
                   placeholder="Phone number"
@@ -526,10 +638,26 @@ export default function Home() {
                     focus:ring-blue-500
                   "
                 />
-
               </div>
 
+              {error && (
+                <div
+                  className="
+                    mt-4
+                    rounded-xl
+                    bg-red-50
+                    text-red-600
+                    px-4
+                    py-3
+                    text-sm
+                  "
+                >
+                  {error}
+                </div>
+              )}
+
               <button
+                id="send-code-button"
                 type="button"
                 onClick={sendOtp}
                 disabled={loading}
@@ -542,10 +670,12 @@ export default function Home() {
                   rounded-xl
                   font-semibold
                   hover:bg-blue-700
-                  disabled:opacity-50
+                  active:scale-[0.98]
                   transition
                   shadow-lg
                   shadow-blue-200
+                  disabled:opacity-60
+                  disabled:cursor-not-allowed
                 "
               >
                 {loading
@@ -555,15 +685,28 @@ export default function Home() {
             </>
           )}
 
-          {/* OTP */}
+          {/* ======================================
+              OTP SCREEN
+              ====================================== */}
 
           {screen === "otp" && (
             <>
-              <h2 className="text-2xl font-bold mb-2">
+              <h2
+                className="
+                  text-2xl
+                  font-bold
+                  mb-2
+                "
+              >
                 Verify your number
               </h2>
 
-              <p className="text-gray-500 mb-6">
+              <p
+                className="
+                  text-gray-500
+                  mb-6
+                "
+              >
                 Enter the 6-digit code sent to:
               </p>
 
@@ -583,6 +726,38 @@ export default function Home() {
                 {country.code} {phone}
               </div>
 
+              {message && (
+                <div
+                  className="
+                    mb-4
+                    rounded-xl
+                    bg-green-50
+                    text-green-700
+                    px-4
+                    py-3
+                    text-sm
+                  "
+                >
+                  {message}
+                </div>
+              )}
+
+              {error && (
+                <div
+                  className="
+                    mb-4
+                    rounded-xl
+                    bg-red-50
+                    text-red-600
+                    px-4
+                    py-3
+                    text-sm
+                  "
+                >
+                  {error}
+                </div>
+              )}
+
               <label
                 htmlFor="otp"
                 className="text-sm font-semibold"
@@ -599,10 +774,7 @@ export default function Home() {
                 value={otp}
                 onChange={(e) =>
                   setOtp(
-                    e.target.value.replace(
-                      /\D/g,
-                      ""
-                    )
+                    e.target.value.replace(/\D/g, "")
                   )
                 }
                 placeholder="000000"
@@ -635,8 +807,12 @@ export default function Home() {
                   rounded-xl
                   font-semibold
                   hover:bg-blue-700
-                  disabled:opacity-50
+                  active:scale-[0.98]
                   transition
+                  shadow-lg
+                  shadow-blue-200
+                  disabled:opacity-60
+                  disabled:cursor-not-allowed
                 "
               >
                 {loading
@@ -644,23 +820,28 @@ export default function Home() {
                   : "Verify & Continue"}
               </button>
 
+              {/* RESEND */}
+
               <button
                 type="button"
-                onClick={resendCode}
+                onClick={resendOtp}
                 disabled={
                   resendSeconds > 0 ||
                   resendLoading
                 }
                 className="
                   w-full
-                  mt-3
-                  text-blue-600
+                  mt-4
                   py-2
+                  text-blue-600
+                  font-semibold
+                  hover:text-blue-800
                   disabled:text-gray-400
+                  disabled:cursor-not-allowed
                 "
               >
                 {resendLoading
-                  ? "Sending..."
+                  ? "Sending new code..."
                   : resendSeconds > 0
                   ? `Resend code in ${resendSeconds}s`
                   : "Resend code"}
@@ -671,10 +852,10 @@ export default function Home() {
                 onClick={changePhone}
                 className="
                   w-full
-                  mt-1
+                  mt-2
                   text-gray-500
                   py-2
-                  hover:text-blue-600
+                  hover:text-gray-700
                 "
               >
                 Change phone number
@@ -682,22 +863,45 @@ export default function Home() {
             </>
           )}
 
-          {/* PROFILE */}
+          {/* ======================================
+              PROFILE SCREEN
+              ====================================== */}
 
           {screen === "profile" && (
             <>
-              <h2 className="text-2xl font-bold mb-2">
+              <h2
+                className="
+                  text-2xl
+                  font-bold
+                  mb-2
+                "
+              >
                 Create your profile
               </h2>
 
-              <p className="text-gray-500 mb-6">
-                Tell people a little about yourself.
+              <p
+                className="
+                  text-gray-500
+                  mb-6
+                "
+              >
+                Your phone number has been verified.
+                Now create your Social freeText profile.
               </p>
 
-              <div className="flex justify-center mb-3">
-
-                <label className="relative cursor-pointer">
-
+              <div
+                className="
+                  flex
+                  justify-center
+                  mb-3
+                "
+              >
+                <label
+                  className="
+                    relative
+                    cursor-pointer
+                  "
+                >
                   {profilePhoto ? (
                     <img
                       src={profilePhoto}
@@ -737,9 +941,7 @@ export default function Home() {
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={
-                      handlePhotoChange
-                    }
+                    onChange={handlePhotoChange}
                     className="hidden"
                   />
 
@@ -758,13 +960,12 @@ export default function Home() {
                       justify-center
                       border-4
                       border-white
+                      shadow-md
                     "
                   >
                     📷
                   </div>
-
                 </label>
-
               </div>
 
               <p
@@ -883,6 +1084,22 @@ export default function Home() {
                 {bio.length}/160
               </p>
 
+              {error && (
+                <div
+                  className="
+                    mt-4
+                    rounded-xl
+                    bg-red-50
+                    text-red-600
+                    px-4
+                    py-3
+                    text-sm
+                  "
+                >
+                  {error}
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={createProfile}
@@ -895,20 +1112,25 @@ export default function Home() {
                   rounded-xl
                   font-semibold
                   hover:bg-blue-700
+                  active:scale-[0.98]
                   transition
+                  shadow-lg
+                  shadow-blue-200
                 "
               >
                 Create Profile
               </button>
             </>
           )}
+
+          {/* Invisible reCAPTCHA container */}
+
+          <div id="recaptcha-container"></div>
         </div>
 
-        {/* INVISIBLE RECAPTCHA */}
-
-        <div id="recaptcha-container"></div>
-
-        {/* AI BRANDING */}
+        {/* ========================================
+            BRANDING
+            ======================================== */}
 
         <div
           className="
@@ -928,7 +1150,6 @@ export default function Home() {
             Boi AchiverAI
           </span>
         </div>
-
       </div>
     </main>
   );
