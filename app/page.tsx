@@ -1,13 +1,16 @@
+"use client";
+
+import { useState } from "react";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
   updateProfile,
+  signOut,
 } from "firebase/auth";
 
-import { auth } from "@/lib/firebase";"use client";
+import { auth } from "@/lib/firebase";
 
-import { useState } from "react";
 import {
   ArrowRight,
   Bell,
@@ -157,20 +160,99 @@ export default function HomePage() {
     }, 3000);
   };
 
-  const handleLogin = () => {
-    if (!email || !password) {
+  /*
+   * FIREBASE LOGIN
+   */
+
+  const handleLogin = async () => {
+    const cleanEmail = email.trim();
+
+    if (!cleanEmail || !password) {
       showNotice("Please enter your email and password");
       return;
     }
 
-    setName(email.split("@")[0] || "Social freeText User");
-    setUsername(email.split("@")[0] || "user");
-    setScreen("home");
+    try {
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        cleanEmail,
+        password
+      );
+
+      const user = userCredential.user;
+
+      setEmail(user.email || cleanEmail);
+
+      setName(
+        user.displayName ||
+          cleanEmail.split("@")[0] ||
+          "Social freeText User"
+      );
+
+      setUsername(
+        user.displayName?.replace(/\s/g, "").toLowerCase() ||
+          cleanEmail.split("@")[0] ||
+          "user"
+      );
+
+      setScreen("home");
+
+      showNotice("Welcome back!");
+    } catch (error: any) {
+      console.error(error);
+
+      switch (error.code) {
+        case "auth/invalid-credential":
+          showNotice("Incorrect email or password");
+          break;
+
+        case "auth/user-not-found":
+          showNotice("No account exists with this email");
+          break;
+
+        case "auth/wrong-password":
+          showNotice("Incorrect password");
+          break;
+
+        case "auth/invalid-email":
+          showNotice("Please enter a valid email address");
+          break;
+
+        case "auth/too-many-requests":
+          showNotice("Too many attempts. Please try again later.");
+          break;
+
+        default:
+          showNotice("Unable to sign in. Please try again.");
+      }
+    }
   };
 
-  const handleSignup = () => {
-    if (!name || !username || !email || !password || !confirmPassword) {
+  /*
+   * FIREBASE SIGNUP
+   */
+
+  const handleSignup = async () => {
+    const cleanName = name.trim();
+    const cleanUsername = username
+      .trim()
+      .replace(/^@/, "")
+      .toLowerCase();
+    const cleanEmail = email.trim();
+
+    if (
+      !cleanName ||
+      !cleanUsername ||
+      !cleanEmail ||
+      !password ||
+      !confirmPassword
+    ) {
       showNotice("Please complete all required fields");
+      return;
+    }
+
+    if (cleanUsername.length < 3) {
+      showNotice("Username must contain at least 3 characters");
       return;
     }
 
@@ -184,17 +266,118 @@ export default function HomePage() {
       return;
     }
 
-    setScreen("profile");
+    try {
+      const userCredential =
+        await createUserWithEmailAndPassword(
+          auth,
+          cleanEmail,
+          password
+        );
+
+      await updateProfile(userCredential.user, {
+        displayName: cleanName,
+      });
+
+      setEmail(cleanEmail);
+      setName(cleanName);
+      setUsername(cleanUsername);
+
+      setScreen("profile");
+
+      showNotice("Account created successfully!");
+    } catch (error: any) {
+      console.error(error);
+
+      switch (error.code) {
+        case "auth/email-already-in-use":
+          showNotice("An account already exists with this email");
+          break;
+
+        case "auth/invalid-email":
+          showNotice("Please enter a valid email address");
+          break;
+
+        case "auth/weak-password":
+          showNotice("Your password is too weak");
+          break;
+
+        default:
+          showNotice("Unable to create account. Please try again.");
+      }
+    }
   };
 
-  const finishProfile = () => {
-    if (!name || !username) {
+  /*
+   * PASSWORD RESET
+   */
+
+  const handlePasswordReset = async () => {
+    const cleanEmail = email.trim();
+
+    if (!cleanEmail) {
+      showNotice("Please enter your email address");
+      return;
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, cleanEmail);
+
+      showNotice("Password reset email sent");
+    } catch (error: any) {
+      console.error(error);
+
+      switch (error.code) {
+        case "auth/invalid-email":
+          showNotice("Please enter a valid email address");
+          break;
+
+        case "auth/user-not-found":
+          showNotice("No account exists with this email");
+          break;
+
+        default:
+          showNotice("Unable to send reset email");
+      }
+    }
+  };
+
+  /*
+   * PROFILE
+   */
+
+  const finishProfile = async () => {
+    const cleanName = name.trim();
+    const cleanUsername = username
+      .trim()
+      .replace(/^@/, "")
+      .toLowerCase();
+
+    if (!cleanName || !cleanUsername) {
       showNotice("Please enter your name and username");
       return;
     }
 
-    setScreen("home");
+    try {
+      if (auth.currentUser) {
+        await updateProfile(auth.currentUser, {
+          displayName: cleanName,
+        });
+      }
+
+      setName(cleanName);
+      setUsername(cleanUsername);
+      setScreen("home");
+
+      showNotice("Welcome to Social freeText!");
+    } catch (error) {
+      console.error(error);
+      showNotice("Profile could not be updated");
+    }
   };
+
+  /*
+   * SEND MESSAGE
+   */
 
   const sendMessage = () => {
     const text = messageText.trim();
@@ -215,6 +398,10 @@ export default function HomePage() {
     setMessageText("");
   };
 
+  /*
+   * CREATE POST
+   */
+
   const createPost = () => {
     if (!postText.trim()) {
       showNotice("Write something before posting");
@@ -229,15 +416,35 @@ export default function HomePage() {
     chat.name.toLowerCase().includes(chatSearch.toLowerCase())
   );
 
-  const logout = () => {
-    setScreen("login");
-    setCurrentChat(null);
-    setEmail("");
-    setPassword("");
+  /*
+   * FIREBASE LOGOUT
+   */
+
+  const logout = async () => {
+    try {
+      await signOut(auth);
+
+      setScreen("login");
+      setCurrentChat(null);
+
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
+
+      setName("");
+      setUsername("");
+      setBio("");
+      setProfilePhoto("");
+
+      showNotice("You have been logged out");
+    } catch (error) {
+      console.error(error);
+      showNotice("Unable to log out");
+    }
   };
 
   /*
-   * AUTH SCREENS
+   * LOGIN SCREEN
    */
 
   if (screen === "login") {
@@ -247,6 +454,7 @@ export default function HomePage() {
           <Logo />
 
           <h1>Welcome back</h1>
+
           <p className="auth-subtitle">
             Sign in to continue to Social freeText
           </p>
@@ -261,7 +469,9 @@ export default function HomePage() {
                 type="email"
                 placeholder="Enter your email"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) =>
+                  setEmail(event.target.value)
+                }
                 autoComplete="email"
               />
             </div>
@@ -277,16 +487,24 @@ export default function HomePage() {
                 type={showPassword ? "text" : "password"}
                 placeholder="Enter your password"
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(event) =>
+                  setPassword(event.target.value)
+                }
                 autoComplete="current-password"
               />
 
               <button
                 type="button"
                 className="input-icon-button"
-                onClick={() => setShowPassword(!showPassword)}
+                onClick={() =>
+                  setShowPassword(!showPassword)
+                }
               >
-                {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+                {showPassword ? (
+                  <EyeOff size={19} />
+                ) : (
+                  <Eye size={19} />
+                )}
               </button>
             </div>
           </div>
@@ -298,7 +516,10 @@ export default function HomePage() {
             Forgot password?
           </button>
 
-          <button className="primary-button" onClick={handleLogin}>
+          <button
+            className="primary-button"
+            onClick={handleLogin}
+          >
             Sign In
             <ArrowRight size={19} />
           </button>
@@ -312,6 +533,7 @@ export default function HomePage() {
             onClick={() => {
               setEmail("");
               setPassword("");
+              setConfirmPassword("");
               setScreen("signup");
             }}
           >
@@ -322,15 +544,24 @@ export default function HomePage() {
             Powered by <strong>Boi AchiverAI</strong>
           </div>
         </div>
+
+        {notice && <Toast message={notice} />}
       </AuthLayout>
     );
   }
+
+  /*
+   * SIGNUP SCREEN
+   */
 
   if (screen === "signup") {
     return (
       <AuthLayout>
         <div className="auth-card signup-card">
-          <button className="back-button" onClick={() => setScreen("login")}>
+          <button
+            className="back-button"
+            onClick={() => setScreen("login")}
+          >
             <ChevronLeft size={20} />
             Back to login
           </button>
@@ -338,6 +569,7 @@ export default function HomePage() {
           <Logo />
 
           <h1>Create account</h1>
+
           <p className="auth-subtitle">
             Join Social freeText and connect with everyone
           </p>
@@ -352,7 +584,9 @@ export default function HomePage() {
                 type="text"
                 placeholder="Your full name"
                 value={name}
-                onChange={(event) => setName(event.target.value)}
+                onChange={(event) =>
+                  setName(event.target.value)
+                }
               />
             </div>
           </div>
@@ -388,7 +622,9 @@ export default function HomePage() {
                 type="email"
                 placeholder="you@example.com"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) =>
+                  setEmail(event.target.value)
+                }
                 autoComplete="email"
               />
             </div>
@@ -404,16 +640,24 @@ export default function HomePage() {
                 type={showPassword ? "text" : "password"}
                 placeholder="At least 6 characters"
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(event) =>
+                  setPassword(event.target.value)
+                }
                 autoComplete="new-password"
               />
 
               <button
                 type="button"
                 className="input-icon-button"
-                onClick={() => setShowPassword(!showPassword)}
+                onClick={() =>
+                  setShowPassword(!showPassword)
+                }
               >
-                {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+                {showPassword ? (
+                  <EyeOff size={19} />
+                ) : (
+                  <Eye size={19} />
+                )}
               </button>
             </div>
           </div>
@@ -425,11 +669,17 @@ export default function HomePage() {
               <Lock size={19} />
 
               <input
-                type={showConfirmPassword ? "text" : "password"}
+                type={
+                  showConfirmPassword
+                    ? "text"
+                    : "password"
+                }
                 placeholder="Repeat your password"
                 value={confirmPassword}
                 onChange={(event) =>
-                  setConfirmPassword(event.target.value)
+                  setConfirmPassword(
+                    event.target.value
+                  )
                 }
                 autoComplete="new-password"
               />
@@ -438,7 +688,9 @@ export default function HomePage() {
                 type="button"
                 className="input-icon-button"
                 onClick={() =>
-                  setShowConfirmPassword(!showConfirmPassword)
+                  setShowConfirmPassword(
+                    !showConfirmPassword
+                  )
                 }
               >
                 {showConfirmPassword ? (
@@ -450,29 +702,41 @@ export default function HomePage() {
             </div>
           </div>
 
-          <button className="primary-button" onClick={handleSignup}>
-            Continue
+          <button
+            className="primary-button"
+            onClick={handleSignup}
+          >
+            Create Account
             <ArrowRight size={19} />
           </button>
 
           <p className="terms-text">
-            By creating an account, you agree to our Terms and Privacy
-            Policy.
+            By creating an account, you agree to our
+            Terms and Privacy Policy.
           </p>
 
           <div className="auth-footer">
             Powered by <strong>Boi AchiverAI</strong>
           </div>
         </div>
+
+        {notice && <Toast message={notice} />}
       </AuthLayout>
     );
   }
+
+  /*
+   * FORGOT PASSWORD
+   */
 
   if (screen === "forgot") {
     return (
       <AuthLayout>
         <div className="auth-card">
-          <button className="back-button" onClick={() => setScreen("login")}>
+          <button
+            className="back-button"
+            onClick={() => setScreen("login")}
+          >
             <ChevronLeft size={20} />
             Back to login
           </button>
@@ -482,7 +746,8 @@ export default function HomePage() {
           <h1>Reset password</h1>
 
           <p className="auth-subtitle">
-            Enter your email and we'll help you reset your password.
+            Enter your email and we'll send you a
+            password reset link.
           </p>
 
           <div className="form-group">
@@ -495,16 +760,16 @@ export default function HomePage() {
                 type="email"
                 placeholder="Enter your email"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) =>
+                  setEmail(event.target.value)
+                }
               />
             </div>
           </div>
 
           <button
             className="primary-button"
-            onClick={() =>
-              showNotice("Password reset request submitted")
-            }
+            onClick={handlePasswordReset}
           >
             Send Reset Link
             <Send size={19} />
@@ -519,6 +784,10 @@ export default function HomePage() {
       </AuthLayout>
     );
   }
+
+  /*
+   * PROFILE CREATION
+   */
 
   if (screen === "profile") {
     return (
@@ -535,7 +804,10 @@ export default function HomePage() {
           <div className="profile-upload">
             <label className="profile-photo-button">
               {profilePhoto ? (
-                <img src={profilePhoto} alt="Profile preview" />
+                <img
+                  src={profilePhoto}
+                  alt="Profile preview"
+                />
               ) : (
                 <>
                   <Camera size={28} />
@@ -548,19 +820,28 @@ export default function HomePage() {
                 accept="image/*"
                 hidden
                 onChange={(event) => {
-                  const file = event.target.files?.[0];
+                  const file =
+                    event.target.files?.[0];
 
                   if (!file) return;
 
-                  if (file.size > 5 * 1024 * 1024) {
-                    showNotice("Image must be less than 5MB");
+                  if (
+                    file.size >
+                    5 * 1024 * 1024
+                  ) {
+                    showNotice(
+                      "Image must be less than 5MB"
+                    );
                     return;
                   }
 
-                  const reader = new FileReader();
+                  const reader =
+                    new FileReader();
 
                   reader.onload = () => {
-                    setProfilePhoto(reader.result as string);
+                    setProfilePhoto(
+                      reader.result as string
+                    );
                   };
 
                   reader.readAsDataURL(file);
@@ -578,7 +859,9 @@ export default function HomePage() {
               <input
                 type="text"
                 value={name}
-                onChange={(event) => setName(event.target.value)}
+                onChange={(event) =>
+                  setName(event.target.value)
+                }
               />
             </div>
           </div>
@@ -587,12 +870,20 @@ export default function HomePage() {
             <label>Username</label>
 
             <div className="input-wrapper">
-              <span className="username-symbol">@</span>
+              <span className="username-symbol">
+                @
+              </span>
 
               <input
                 type="text"
                 value={username}
-                onChange={(event) => setUsername(event.target.value)}
+                onChange={(event) =>
+                  setUsername(
+                    event.target.value
+                      .replace(/\s/g, "")
+                      .toLowerCase()
+                  )
+                }
               />
             </div>
           </div>
@@ -604,12 +895,17 @@ export default function HomePage() {
               className="textarea"
               placeholder="Tell people a little about yourself..."
               value={bio}
-              onChange={(event) => setBio(event.target.value)}
+              onChange={(event) =>
+                setBio(event.target.value)
+              }
               rows={4}
             />
           </div>
 
-          <button className="primary-button" onClick={finishProfile}>
+          <button
+            className="primary-button"
+            onClick={finishProfile}
+          >
             Enter Social freeText
             <ArrowRight size={19} />
           </button>
@@ -630,7 +926,9 @@ export default function HomePage() {
 
       <header className="top-header">
         <div className="brand-mini">
-          <div className="brand-mini-logo">SF</div>
+          <div className="brand-mini-logo">
+            SF
+          </div>
 
           <div>
             <strong>Social freeText</strong>
@@ -650,7 +948,9 @@ export default function HomePage() {
         <div className="header-actions">
           <button
             className="icon-button"
-            onClick={() => setScreen("notifications")}
+            onClick={() =>
+              setScreen("notifications")
+            }
           >
             <Bell size={21} />
             <span className="notification-dot" />
@@ -658,19 +958,29 @@ export default function HomePage() {
 
           <button
             className="icon-button"
-            onClick={() => setScreen("settings")}
+            onClick={() =>
+              setScreen("settings")
+            }
           >
             <Settings size={21} />
           </button>
 
           <button
             className="mini-profile"
-            onClick={() => setScreen("profilePage")}
+            onClick={() =>
+              setScreen("profilePage")
+            }
           >
             {profilePhoto ? (
-              <img src={profilePhoto} alt={name} />
+              <img
+                src={profilePhoto}
+                alt={name}
+              />
             ) : (
-              <span>{name.charAt(0).toUpperCase() || "U"}</span>
+              <span>
+                {name.charAt(0).toUpperCase() ||
+                  "U"}
+              </span>
             )}
           </button>
         </div>
@@ -714,11 +1024,17 @@ export default function HomePage() {
             />
           )}
 
-          {screen === "status" && <StatusScreen />}
+          {screen === "status" && (
+            <StatusScreen />
+          )}
 
-          {screen === "communities" && <CommunitiesScreen />}
+          {screen === "communities" && (
+            <CommunitiesScreen />
+          )}
 
-          {screen === "notifications" && <NotificationsScreen />}
+          {screen === "notifications" && (
+            <NotificationsScreen />
+          )}
 
           {screen === "profilePage" && (
             <ProfileScreen
@@ -750,7 +1066,9 @@ export default function HomePage() {
 
         <NavButton
           active={screen === "chats"}
-          icon={<MessageCircle size={22} />}
+          icon={
+            <MessageCircle size={22} />
+          }
           label="Chats"
           onClick={() => setScreen("chats")}
         />
@@ -763,17 +1081,25 @@ export default function HomePage() {
         />
 
         <NavButton
-          active={screen === "communities"}
+          active={
+            screen === "communities"
+          }
           icon={<Users size={22} />}
           label="Groups"
-          onClick={() => setScreen("communities")}
+          onClick={() =>
+            setScreen("communities")
+          }
         />
 
         <NavButton
-          active={screen === "profilePage"}
+          active={
+            screen === "profilePage"
+          }
           icon={<User size={22} />}
           label="Profile"
-          onClick={() => setScreen("profilePage")}
+          onClick={() =>
+            setScreen("profilePage")
+          }
         />
       </nav>
     </div>
@@ -810,6 +1136,7 @@ function Logo() {
         <div className="sf-ring" />
         <div className="sf-ring-two" />
         <div className="sf-shine" />
+
         <span>SF</span>
       </div>
 
@@ -837,16 +1164,24 @@ function Navigation({
   return (
     <div className="navigation">
       <button
-        className={`nav-item ${screen === "home" ? "active" : ""}`}
-        onClick={() => setScreen("home")}
+        className={`nav-item ${
+          screen === "home" ? "active" : ""
+        }`}
+        onClick={() =>
+          setScreen("home")
+        }
       >
         <Home size={21} />
         <span>Home</span>
       </button>
 
       <button
-        className={`nav-item ${screen === "chats" ? "active" : ""}`}
-        onClick={() => setScreen("chats")}
+        className={`nav-item ${
+          screen === "chats" ? "active" : ""
+        }`}
+        onClick={() =>
+          setScreen("chats")
+        }
       >
         <MessageCircle size={21} />
         <span>Chats</span>
@@ -854,8 +1189,12 @@ function Navigation({
       </button>
 
       <button
-        className={`nav-item ${screen === "status" ? "active" : ""}`}
-        onClick={() => setScreen("status")}
+        className={`nav-item ${
+          screen === "status" ? "active" : ""
+        }`}
+        onClick={() =>
+          setScreen("status")
+        }
       >
         <Play size={21} />
         <span>Status</span>
@@ -863,9 +1202,13 @@ function Navigation({
 
       <button
         className={`nav-item ${
-          screen === "communities" ? "active" : ""
+          screen === "communities"
+            ? "active"
+            : ""
         }`}
-        onClick={() => setScreen("communities")}
+        onClick={() =>
+          setScreen("communities")
+        }
       >
         <Users size={21} />
         <span>Communities</span>
@@ -873,9 +1216,13 @@ function Navigation({
 
       <button
         className={`nav-item ${
-          screen === "notifications" ? "active" : ""
+          screen === "notifications"
+            ? "active"
+            : ""
         }`}
-        onClick={() => setScreen("notifications")}
+        onClick={() =>
+          setScreen("notifications")
+        }
       >
         <Bell size={21} />
         <span>Notifications</span>
@@ -885,9 +1232,13 @@ function Navigation({
 
       <button
         className={`nav-item ${
-          screen === "profilePage" ? "active" : ""
+          screen === "profilePage"
+            ? "active"
+            : ""
         }`}
-        onClick={() => setScreen("profilePage")}
+        onClick={() =>
+          setScreen("profilePage")
+        }
       >
         <User size={21} />
         <span>Profile</span>
@@ -895,22 +1246,36 @@ function Navigation({
 
       <button
         className={`nav-item ${
-          screen === "settings" ? "active" : ""
+          screen === "settings"
+            ? "active"
+            : ""
         }`}
-        onClick={() => setScreen("settings")}
+        onClick={() =>
+          setScreen("settings")
+        }
       >
         <Settings size={21} />
         <span>Settings</span>
       </button>
 
-      <button className="nav-item ai-nav" onClick={() => alert("Boi AchiverAI is coming next!")}>
+      <button
+        className="nav-item ai-nav"
+        onClick={() =>
+          alert(
+            "Boi AchiverAI is coming next!"
+          )
+        }
+      >
         <Bot size={21} />
         <span>Boi AchiverAI</span>
       </button>
 
       <div className="nav-spacer" />
 
-      <button className="nav-item logout-nav" onClick={onLogout}>
+      <button
+        className="nav-item logout-nav"
+        onClick={onLogout}
+      >
         <X size={21} />
         <span>Log out</span>
       </button>
@@ -944,12 +1309,19 @@ function HomeScreen({
       <div className="page-heading">
         <div>
           <h1>Home</h1>
-          <p>Welcome back, {name || "friend"} 👋</p>
+          <p>
+            Welcome back,{" "}
+            {name || "friend"} 👋
+          </p>
         </div>
 
         <button
           className="ai-button"
-          onClick={() => alert("Boi AchiverAI is coming next!")}
+          onClick={() =>
+            alert(
+              "Boi AchiverAI is coming next!"
+            )
+          }
         >
           <Sparkles size={18} />
           Ask Boi AchiverAI
@@ -959,9 +1331,13 @@ function HomeScreen({
       <div className="composer-card">
         <div className="composer-avatar">
           {profilePhoto ? (
-            <img src={profilePhoto} alt={name} />
+            <img
+              src={profilePhoto}
+              alt={name}
+            />
           ) : (
-            name.charAt(0).toUpperCase() || "U"
+            name.charAt(0).toUpperCase() ||
+            "U"
           )}
         </div>
 
@@ -971,7 +1347,9 @@ function HomeScreen({
               name || "friend"
             }?`}
             value={postText}
-            onChange={(event) => setPostText(event.target.value)}
+            onChange={(event) =>
+              setPostText(event.target.value)
+            }
           />
 
           <div className="composer-bottom">
@@ -992,7 +1370,10 @@ function HomeScreen({
               </button>
             </div>
 
-            <button className="post-button" onClick={createPost}>
+            <button
+              className="post-button"
+              onClick={createPost}
+            >
               Post
             </button>
           </div>
@@ -1004,15 +1385,24 @@ function HomeScreen({
           <div className="story-add-icon">
             <Plus size={24} />
           </div>
+
           <span>Your story</span>
         </div>
 
-        {["AG", "SF", "AI", "DC"].map((item) => (
-          <div className="story-item" key={item}>
-            <div className="story-avatar">{item}</div>
-            <span>{item}</span>
-          </div>
-        ))}
+        {["AG", "SF", "AI", "DC"].map(
+          (item) => (
+            <div
+              className="story-item"
+              key={item}
+            >
+              <div className="story-avatar">
+                {item}
+              </div>
+
+              <span>{item}</span>
+            </div>
+          )
+        )}
       </div>
 
       <PostCard
@@ -1040,17 +1430,29 @@ function HomeScreen({
       />
 
       <div className="quick-links">
-        <button onClick={() => setScreen("chats")}>
+        <button
+          onClick={() =>
+            setScreen("chats")
+          }
+        >
           <MessageCircle size={22} />
           Open Chats
         </button>
 
-        <button onClick={() => setScreen("communities")}>
+        <button
+          onClick={() =>
+            setScreen("communities")
+          }
+        >
           <Users size={22} />
           Explore Communities
         </button>
 
-        <button onClick={() => setScreen("status")}>
+        <button
+          onClick={() =>
+            setScreen("status")
+          }
+        >
           <Play size={22} />
           View Status
         </button>
@@ -1076,17 +1478,25 @@ function PostCard({
   time: string;
   text: string;
 }) {
-  const [liked, setLiked] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [likes, setLikes] = useState(24);
+  const [liked, setLiked] =
+    useState(false);
+
+  const [saved, setSaved] =
+    useState(false);
+
+  const [likes, setLikes] =
+    useState(24);
 
   return (
     <article className="post-card">
       <div className="post-header">
-        <div className="post-avatar">{avatar}</div>
+        <div className="post-avatar">
+          {avatar}
+        </div>
 
         <div className="post-author">
           <strong>{name}</strong>
+
           <span>
             {username} · {time}
           </span>
@@ -1097,17 +1507,34 @@ function PostCard({
         </button>
       </div>
 
-      <p className="post-text">{text}</p>
+      <p className="post-text">
+        {text}
+      </p>
 
       <div className="post-actions">
         <button
-          className={liked ? "liked" : ""}
+          className={
+            liked ? "liked" : ""
+          }
           onClick={() => {
             setLiked(!liked);
-            setLikes(liked ? likes - 1 : likes + 1);
+
+            setLikes(
+              liked
+                ? likes - 1
+                : likes + 1
+            );
           }}
         >
-          <Heart size={20} fill={liked ? "currentColor" : "none"} />
+          <Heart
+            size={20}
+            fill={
+              liked
+                ? "currentColor"
+                : "none"
+            }
+          />
+
           {likes}
         </button>
 
@@ -1122,11 +1549,18 @@ function PostCard({
         </button>
 
         <button
-          className={saved ? "saved" : ""}
-          onClick={() => setSaved(!saved)}
+          className={
+            saved ? "saved" : ""
+          }
+          onClick={() =>
+            setSaved(!saved)
+          }
         >
           <Check size={20} />
-          {saved ? "Saved" : "Save"}
+
+          {saved
+            ? "Saved"
+            : "Save"}
         </button>
       </div>
     </article>
@@ -1147,7 +1581,6 @@ function ChatsScreen({
   messageText,
   setMessageText,
   sendMessage,
-  setMessages,
   showNotice,
 }: {
   chats: Chat[];
@@ -1159,16 +1592,26 @@ function ChatsScreen({
   messageText: string;
   setMessageText: (value: string) => void;
   sendMessage: () => void;
-  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
+  setMessages: React.Dispatch<
+    React.SetStateAction<Message[]>
+  >;
   showNotice: (message: string) => void;
 }) {
   return (
     <div className="chat-layout">
-      <div className={`chat-list ${currentChat ? "mobile-hidden" : ""}`}>
+      <div
+        className={`chat-list ${
+          currentChat
+            ? "mobile-hidden"
+            : ""
+        }`}
+      >
         <div className="chat-list-header">
           <div>
             <h1>Chats</h1>
-            <span>Stay connected</span>
+            <span>
+              Stay connected
+            </span>
           </div>
 
           <button className="new-chat-button">
@@ -1183,7 +1626,11 @@ function ChatsScreen({
             type="text"
             placeholder="Search chats"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) =>
+              setSearch(
+                event.target.value
+              )
+            }
           />
         </div>
 
@@ -1191,28 +1638,44 @@ function ChatsScreen({
           {chats.map((chat) => (
             <button
               className={`chat-item ${
-                currentChat?.id === chat.id ? "selected" : ""
+                currentChat?.id ===
+                chat.id
+                  ? "selected"
+                  : ""
               }`}
               key={chat.id}
-              onClick={() => setCurrentChat(chat)}
+              onClick={() =>
+                setCurrentChat(chat)
+              }
             >
               <div className="chat-avatar-wrapper">
-                <div className="chat-avatar">{chat.avatar}</div>
+                <div className="chat-avatar">
+                  {chat.avatar}
+                </div>
 
-                {chat.online && <span className="online-dot" />}
+                {chat.online && (
+                  <span className="online-dot" />
+                )}
               </div>
 
               <div className="chat-item-info">
                 <div className="chat-item-top">
-                  <strong>{chat.name}</strong>
+                  <strong>
+                    {chat.name}
+                  </strong>
+
                   <span>Now</span>
                 </div>
 
                 <div className="chat-item-bottom">
-                  <p>{chat.lastMessage}</p>
+                  <p>
+                    {chat.lastMessage}
+                  </p>
 
                   {chat.unread > 0 && (
-                    <b className="unread-count">{chat.unread}</b>
+                    <b className="unread-count">
+                      {chat.unread}
+                    </b>
                   )}
                 </div>
               </div>
@@ -1226,24 +1689,35 @@ function ChatsScreen({
           <div className="chat-window-header">
             <button
               className="chat-back-button"
-              onClick={() => setCurrentChat(null)}
+              onClick={() =>
+                setCurrentChat(null)
+              }
             >
               <ChevronLeft size={22} />
             </button>
 
-            <div className="chat-avatar">{currentChat.avatar}</div>
+            <div className="chat-avatar">
+              {currentChat.avatar}
+            </div>
 
             <div className="chat-window-user">
-              <strong>{currentChat.name}</strong>
+              <strong>
+                {currentChat.name}
+              </strong>
+
               <span>
-                {currentChat.online ? "Online" : "Offline"}
+                {currentChat.online
+                  ? "Online"
+                  : "Offline"}
               </span>
             </div>
 
             <div className="chat-window-actions">
               <button
                 onClick={() =>
-                  showNotice("Voice calling will be connected next")
+                  showNotice(
+                    "Voice calling will be connected next"
+                  )
                 }
               >
                 <MessageCircle size={20} />
@@ -1251,7 +1725,9 @@ function ChatsScreen({
 
               <button
                 onClick={() =>
-                  showNotice("Video calling will be connected next")
+                  showNotice(
+                    "Video calling will be connected next"
+                  )
                 }
               >
                 <Video size={20} />
@@ -1264,35 +1740,53 @@ function ChatsScreen({
           </div>
 
           <div className="messages-area">
-            <div className="chat-date">Today</div>
+            <div className="chat-date">
+              Today
+            </div>
 
-            {messages.map((message) => (
-              <div
-                className={`message-row ${
-                  message.sender === "me" ? "mine" : "theirs"
-                }`}
-                key={message.id}
-              >
-                <div className="message-bubble">
-                  <p>{message.text}</p>
+            {messages.map(
+              (message) => (
+                <div
+                  className={`message-row ${
+                    message.sender ===
+                    "me"
+                      ? "mine"
+                      : "theirs"
+                  }`}
+                  key={message.id}
+                >
+                  <div className="message-bubble">
+                    <p>
+                      {message.text}
+                    </p>
 
-                  <span>
-                    {message.time}
-                    {message.sender === "me" && " ✓✓"}
-                  </span>
+                    <span>
+                      {message.time}
 
-                  {message.reaction && (
-                    <small>{message.reaction}</small>
-                  )}
+                      {message.sender ===
+                        "me" &&
+                        " ✓✓"}
+                    </span>
+
+                    {message.reaction && (
+                      <small>
+                        {
+                          message.reaction
+                        }
+                      </small>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            )}
           </div>
 
           <div className="message-composer">
             <button
               onClick={() =>
-                showNotice("Attachment upload will be connected next")
+                showNotice(
+                  "Attachment upload will be connected next"
+                )
               }
             >
               <Plus size={22} />
@@ -1302,9 +1796,16 @@ function ChatsScreen({
               type="text"
               placeholder="Write a message..."
               value={messageText}
-              onChange={(event) => setMessageText(event.target.value)}
+              onChange={(event) =>
+                setMessageText(
+                  event.target.value
+                )
+              }
               onKeyDown={(event) => {
-                if (event.key === "Enter") {
+                if (
+                  event.key ===
+                  "Enter"
+                ) {
                   sendMessage();
                 }
               }}
@@ -1312,13 +1813,18 @@ function ChatsScreen({
 
             <button
               onClick={() =>
-                showNotice("Voice notes will be connected next")
+                showNotice(
+                  "Voice notes will be connected next"
+                )
               }
             >
               <MessageCircle size={21} />
             </button>
 
-            <button className="send-message" onClick={sendMessage}>
+            <button
+              className="send-message"
+              onClick={sendMessage}
+            >
               <Send size={20} />
             </button>
           </div>
@@ -1329,8 +1835,14 @@ function ChatsScreen({
             <MessageCircle size={42} />
           </div>
 
-          <h2>Select a chat</h2>
-          <p>Choose a conversation to start messaging.</p>
+          <h2>
+            Select a chat
+          </h2>
+
+          <p>
+            Choose a conversation to
+            start messaging.
+          </p>
         </div>
       )}
     </div>
@@ -1347,7 +1859,11 @@ function StatusScreen() {
       <div className="page-heading">
         <div>
           <h1>Status</h1>
-          <p>Share moments with your connections.</p>
+
+          <p>
+            Share moments with your
+            connections.
+          </p>
         </div>
 
         <button className="primary-small-button">
@@ -1361,22 +1877,51 @@ function StatusScreen() {
           <div className="status-add-circle">
             <Plus size={28} />
           </div>
-          <strong>Add your status</strong>
-          <span>Share a photo, video or text</span>
+
+          <strong>
+            Add your status
+          </strong>
+
+          <span>
+            Share a photo, video or text
+          </span>
         </div>
 
         {[
           ["AG", "Andy Gill", "12 min"],
-          ["SF", "Social freeText", "32 min"],
-          ["AI", "Boi AchiverAI", "1 hr"],
-          ["DC", "Design Community", "2 hrs"],
-        ].map(([avatar, title, time]) => (
-          <div className="status-card" key={title}>
-            <div className="status-avatar">{avatar}</div>
-            <strong>{title}</strong>
-            <span>{time}</span>
-          </div>
-        ))}
+          [
+            "SF",
+            "Social freeText",
+            "32 min",
+          ],
+          [
+            "AI",
+            "Boi AchiverAI",
+            "1 hr",
+          ],
+          [
+            "DC",
+            "Design Community",
+            "2 hrs",
+          ],
+        ].map(
+          ([avatar, title, time]) => (
+            <div
+              className="status-card"
+              key={title}
+            >
+              <div className="status-avatar">
+                {avatar}
+              </div>
+
+              <strong>
+                {title}
+              </strong>
+
+              <span>{time}</span>
+            </div>
+          )
+        )}
       </div>
     </div>
   );
@@ -1391,8 +1936,14 @@ function CommunitiesScreen() {
     <div className="content-container">
       <div className="page-heading">
         <div>
-          <h1>Communities</h1>
-          <p>Find people who share your interests.</p>
+          <h1>
+            Communities
+          </h1>
+
+          <p>
+            Find people who share your
+            interests.
+          </p>
         </div>
 
         <button className="primary-small-button">
@@ -1403,24 +1954,62 @@ function CommunitiesScreen() {
 
       <div className="community-grid">
         {[
-          ["🎨", "Creative Designers", "12.4K members"],
-          ["💻", "Developers Hub", "25.8K members"],
-          ["🎵", "Music Lovers", "18.2K members"],
-          ["📚", "Students Community", "9.7K members"],
-          ["📸", "Photography", "15.3K members"],
-          ["🚀", "Entrepreneurs", "21.5K members"],
-        ].map(([emoji, title, members]) => (
-          <div className="community-card" key={title}>
-            <div className="community-icon">{emoji}</div>
+          [
+            "🎨",
+            "Creative Designers",
+            "12.4K members",
+          ],
+          [
+            "💻",
+            "Developers Hub",
+            "25.8K members",
+          ],
+          [
+            "🎵",
+            "Music Lovers",
+            "18.2K members",
+          ],
+          [
+            "📚",
+            "Students Community",
+            "9.7K members",
+          ],
+          [
+            "📸",
+            "Photography",
+            "15.3K members",
+          ],
+          [
+            "🚀",
+            "Entrepreneurs",
+            "21.5K members",
+          ],
+        ].map(
+          ([emoji, title, members]) => (
+            <div
+              className="community-card"
+              key={title}
+            >
+              <div className="community-icon">
+                {emoji}
+              </div>
 
-            <div>
-              <strong>{title}</strong>
-              <span>{members}</span>
+              <div>
+                <strong>
+                  {title}
+                </strong>
+
+                <span>
+                  {members}
+                </span>
+              </div>
+
+              <button>
+                Join
+              </button>
             </div>
-
-            <button>Join</button>
-          </div>
-        ))}
+          )
+        )}
       </div>
     </div>
   );
@@ -1432,36 +2021,70 @@ function CommunitiesScreen() {
 
 function NotificationsScreen() {
   const notifications = [
-    ["AG", "Andy Gill liked your post", "5 min ago"],
-    ["SF", "Social freeText mentioned you", "20 min ago"],
-    ["AI", "Boi AchiverAI has a new update", "1 hr ago"],
-    ["DC", "You have a new community invitation", "2 hrs ago"],
+    [
+      "AG",
+      "Andy Gill liked your post",
+      "5 min ago",
+    ],
+    [
+      "SF",
+      "Social freeText mentioned you",
+      "20 min ago",
+    ],
+    [
+      "AI",
+      "Boi AchiverAI has a new update",
+      "1 hr ago",
+    ],
+    [
+      "DC",
+      "You have a new community invitation",
+      "2 hrs ago",
+    ],
   ];
 
   return (
     <div className="content-container">
       <div className="page-heading">
         <div>
-          <h1>Notifications</h1>
-          <p>Stay updated with what's happening.</p>
+          <h1>
+            Notifications
+          </h1>
+
+          <p>
+            Stay updated with what's
+            happening.
+          </p>
         </div>
       </div>
 
       <div className="notifications-list">
-        {notifications.map(([avatar, text, time]) => (
-          <div className="notification-item" key={text}>
-            <div className="notification-avatar">{avatar}</div>
+        {notifications.map(
+          ([avatar, text, time]) => (
+            <div
+              className="notification-item"
+              key={text}
+            >
+              <div className="notification-avatar">
+                {avatar}
+              </div>
 
-            <div>
-              <strong>{text}</strong>
-              <span>{time}</span>
+              <div>
+                <strong>
+                  {text}
+                </strong>
+
+                <span>
+                  {time}
+                </span>
+              </div>
+
+              <button>
+                <MoreHorizontal size={20} />
+              </button>
             </div>
-
-            <button>
-              <MoreHorizontal size={20} />
-            </button>
-          </div>
-        ))}
+          )
+        )}
       </div>
     </div>
   );
@@ -1489,9 +2112,13 @@ function ProfileScreen({
       <div className="profile-cover">
         <div className="profile-large-avatar">
           {profilePhoto ? (
-            <img src={profilePhoto} alt={name} />
+            <img
+              src={profilePhoto}
+              alt={name}
+            />
           ) : (
-            name.charAt(0).toUpperCase() || "U"
+            name.charAt(0).toUpperCase() ||
+            "U"
           )}
         </div>
       </div>
@@ -1499,19 +2126,30 @@ function ProfileScreen({
       <div className="profile-info">
         <div className="profile-info-top">
           <div>
-            <h1>{name || "Social freeText User"}</h1>
-            <span>@{username || "user"}</span>
+            <h1>
+              {name ||
+                "Social freeText User"}
+            </h1>
+
+            <span>
+              @{username || "user"}
+            </span>
           </div>
 
           <button
             className="secondary-small-button"
-            onClick={() => setScreen("settings")}
+            onClick={() =>
+              setScreen("settings")
+            }
           >
             Edit Profile
           </button>
         </div>
 
-        <p>{bio || "Welcome to my Social freeText profile."}</p>
+        <p>
+          {bio ||
+            "Welcome to my Social freeText profile."}
+        </p>
 
         <div className="profile-stats">
           <div>
@@ -1532,15 +2170,31 @@ function ProfileScreen({
       </div>
 
       <div className="profile-tabs">
-        <button className="active">Posts</button>
-        <button>Media</button>
-        <button>Likes</button>
+        <button className="active">
+          Posts
+        </button>
+
+        <button>
+          Media
+        </button>
+
+        <button>
+          Likes
+        </button>
       </div>
 
       <PostCard
-        avatar={name.charAt(0).toUpperCase() || "U"}
-        name={name || "Social freeText User"}
-        username={`@${username || "user"}`}
+        avatar={
+          name.charAt(0).toUpperCase() ||
+          "U"
+        }
+        name={
+          name ||
+          "Social freeText User"
+        }
+        username={`@${
+          username || "user"
+        }`}
         time="Today"
         text="Welcome to my Social freeText profile 🚀"
       />
@@ -1566,7 +2220,11 @@ function SettingsScreen({
       <div className="page-heading">
         <div>
           <h1>Settings</h1>
-          <p>Manage your Social freeText account.</p>
+
+          <p>
+            Manage your Social freeText
+            account.
+          </p>
         </div>
       </div>
 
@@ -1577,13 +2235,21 @@ function SettingsScreen({
           </div>
 
           <div>
-            <strong>Email address</strong>
-            <span>{email || "No email available"}</span>
+            <strong>
+              Email address
+            </strong>
+
+            <span>
+              {email ||
+                "No email available"}
+            </span>
           </div>
 
           <button
             onClick={() =>
-              showNotice("Email settings will be connected next")
+              showNotice(
+                "Email settings will be connected next"
+              )
             }
           >
             Change
@@ -1596,13 +2262,20 @@ function SettingsScreen({
           </div>
 
           <div>
-            <strong>Password</strong>
-            <span>••••••••</span>
+            <strong>
+              Password
+            </strong>
+
+            <span>
+              ••••••••
+            </span>
           </div>
 
           <button
             onClick={() =>
-              showNotice("Password reset will be connected next")
+              showNotice(
+                "Use Forgot Password to change your password"
+              )
             }
           >
             Change
@@ -1615,13 +2288,21 @@ function SettingsScreen({
           </div>
 
           <div>
-            <strong>Security</strong>
-            <span>Account security and login settings</span>
+            <strong>
+              Security
+            </strong>
+
+            <span>
+              Account security and login
+              settings
+            </span>
           </div>
 
           <button
             onClick={() =>
-              showNotice("Security settings coming next")
+              showNotice(
+                "Security settings coming next"
+              )
             }
           >
             Open
@@ -1634,13 +2315,21 @@ function SettingsScreen({
           </div>
 
           <div>
-            <strong>Notifications</strong>
-            <span>Manage notification preferences</span>
+            <strong>
+              Notifications
+            </strong>
+
+            <span>
+              Manage notification
+              preferences
+            </span>
           </div>
 
           <button
             onClick={() =>
-              showNotice("Notification settings coming next")
+              showNotice(
+                "Notification settings coming next"
+              )
             }
           >
             Open
@@ -1653,11 +2342,18 @@ function SettingsScreen({
           </div>
 
           <div>
-            <strong>Log out</strong>
-            <span>Sign out of this account</span>
+            <strong>
+              Log out
+            </strong>
+
+            <span>
+              Sign out of this account
+            </span>
           </div>
 
-          <button onClick={onLogout}>Log out</button>
+          <button onClick={onLogout}>
+            Log out
+          </button>
         </div>
       </div>
     </div>
@@ -1681,7 +2377,9 @@ function NavButton({
 }) {
   return (
     <button
-      className={`mobile-nav-button ${active ? "active" : ""}`}
+      className={`mobile-nav-button ${
+        active ? "active" : ""
+      }`}
       onClick={onClick}
     >
       {icon}
@@ -1694,7 +2392,11 @@ function NavButton({
  * TOAST
  */
 
-function Toast({ message }: { message: string }) {
+function Toast({
+  message,
+}: {
+  message: string;
+}) {
   return (
     <div className="toast">
       <Check size={18} />
