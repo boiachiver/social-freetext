@@ -1,4 +1,11 @@
-"use client";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  updateProfile,
+} from "firebase/auth";
+
+import { auth } from "@/lib/firebase";"use client";
 
 import { useState } from "react";
 import {
