@@ -1,14 +1,13 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { sendPasswordResetEmail } from "firebase/auth";
 import {
   ArrowLeft,
   Mail,
   Send,
 } from "lucide-react";
 
-import { auth } from "@/lib/firebase";
+import { resetPassword } from "@/lib/auth";
 
 type ForgotPasswordProps = {
   onBack: () => void;
@@ -40,7 +39,7 @@ export default function ForgotPassword({
     setLoading(true);
 
     try {
-      await sendPasswordResetEmail(auth, cleanEmail);
+      await resetPassword(cleanEmail);
 
       setSuccess(
         "Password reset email sent. Please check your inbox."
@@ -55,24 +54,26 @@ export default function ForgotPassword({
 
       switch (firebaseError.code) {
         case "auth/invalid-email":
-          setError("Please enter a valid email address.");
+          setError(
+            "Please enter a valid email address."
+          );
           break;
 
         case "auth/user-not-found":
           setError(
-            "No account was found with this email address."
-          );
-          break;
-
-        case "auth/network-request-failed":
-          setError(
-            "Network error. Please check your internet connection."
+            "No account was found with this email."
           );
           break;
 
         case "auth/too-many-requests":
           setError(
             "Too many requests. Please try again later."
+          );
+          break;
+
+        case "auth/network-request-failed":
+          setError(
+            "Network error. Please check your internet connection."
           );
           break;
 
@@ -89,36 +90,36 @@ export default function ForgotPassword({
 
   return (
     <div className="auth-card">
-      <button
-        type="button"
-        className="back-button"
-        onClick={onBack}
-        disabled={loading}
-      >
-        <ArrowLeft size={20} />
-        Back to login
-      </button>
+      {/* LOGO */}
 
       <div className="auth-logo-area">
         <div className="sf-logo">
           <div className="sf-ring" />
           <div className="sf-ring-two" />
           <div className="sf-shine" />
+
           <span>SF</span>
         </div>
 
         <div className="auth-brand-name">
           <strong>Social freeText</strong>
-          <span>Connect. Chat. Share.</span>
+
+          <span>
+            Connect. Chat. Share.
+          </span>
         </div>
       </div>
+
+      {/* TITLE */}
 
       <h1>Reset password</h1>
 
       <p className="auth-subtitle">
-        Enter your email and we'll send you a link to
-        reset your password.
+        Enter your email and we'll send you a
+        password reset link.
       </p>
+
+      {/* FORM */}
 
       <form onSubmit={submitReset}>
         <div className="form-group">
@@ -143,31 +144,62 @@ export default function ForgotPassword({
           </div>
         </div>
 
+        {/* ERROR */}
+
         {error && (
-          <div className="auth-error" role="alert">
+          <div
+            className="auth-error"
+            role="alert"
+          >
             {error}
           </div>
         )}
 
+        {/* SUCCESS */}
+
         {success && (
-          <div className="auth-success" role="status">
+          <div
+            className="auth-success"
+            role="status"
+          >
             {success}
           </div>
         )}
+
+        {/* SEND BUTTON */}
 
         <button
           type="submit"
           className="primary-button"
           disabled={loading}
         >
-          {loading ? "Sending..." : "Send Reset Link"}
+          {loading
+            ? "Sending..."
+            : "Send Reset Link"}
 
-          {!loading && <Send size={19} />}
+          {!loading && (
+            <Send size={19} />
+          )}
         </button>
       </form>
 
+      {/* BACK */}
+
+      <button
+        type="button"
+        className="secondary-button"
+        onClick={onBack}
+        disabled={loading}
+      >
+        <ArrowLeft size={19} />
+        Back to Sign In
+      </button>
+
+      {/* FOOTER */}
+
       <div className="auth-footer">
-        Powered by <strong>Boi AchiverAI</strong>
+        Powered by{" "}
+        <strong>Boi AchiverAI</strong>
       </div>
     </div>
   );
