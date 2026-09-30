@@ -1,52 +1,26 @@
 import {
-  createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
-  signInWithEmailAndPassword,
   signOut as firebaseSignOut,
-  updateProfile,
+  sendPasswordResetEmail,
 } from "firebase/auth";
 
-import { auth } from "./firebase";
+import { auth } from "@/lib/firebase";
 
-export async function handleSignup(
-  email: string,
-  password: string,
-  name: string
-) {
-  const userCredential = await createUserWithEmailAndPassword(
-    auth,
-    email,
-    password
-  );
-
-  const user = userCredential.user;
-
-  if (name.trim()) {
-    await updateProfile(user, {
-      displayName: name.trim(),
-    });
-  }
-
-  return user;
-}
-
-export async function handleLogin(
-  email: string,
-  password: string
-) {
-  const userCredential = await signInWithEmailAndPassword(
-    auth,
-    email,
-    password
-  );
-
-  return userCredential.user;
-}
-
-export async function handlePasswordReset(email: string) {
-  await sendPasswordResetEmail(auth, email);
-}
-
+/**
+ * Sign out the current user
+ */
 export async function signOut() {
   await firebaseSignOut(auth);
+}
+
+/**
+ * Send a password reset email
+ */
+export async function resetPassword(email: string) {
+  const cleanEmail = email.trim().toLowerCase();
+
+  if (!cleanEmail) {
+    throw new Error("Please enter your email address.");
+  }
+
+  await sendPasswordResetEmail(auth, cleanEmail);
 }
