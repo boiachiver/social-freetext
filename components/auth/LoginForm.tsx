@@ -1,6 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { FormEvent, useState } from "react";
+import {
+  signInWithEmailAndPassword,
+  signOut,
+} from "firebase/auth";
 import {
   ArrowRight,
   Eye,
@@ -9,18 +13,18 @@ import {
   Mail,
 } from "lucide-react";
 
-import { handleLogin } from "@/lib/auth";
+import { auth } from "@/lib/firebase";
 
 type LoginFormProps = {
-  onSignup: () => void;
+  onSuccess: () => void;
   onForgotPassword: () => void;
-  onSuccess: (user: any) => void;
+  onCreateAccount: () => void;
 };
 
 export default function LoginForm({
-  onSignup,
-  onForgotPassword,
   onSuccess,
+  onForgotPassword,
+  onCreateAccount,
 }: LoginFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,29 +33,37 @@ export default function LoginForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  async function submitLogin() {
+  const submitLogin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
     setError("");
 
-    if (!email.trim() || !password) {
+    const cleanEmail = email.trim();
+
+    if (!cleanEmail || !password) {
       setError("Please enter your email and password.");
       return;
     }
 
-    try {
-      setLoading(true);
+    setLoading(true);
 
-      const user = await handleLogin(
-        email.trim(),
+    try {
+      await signInWithEmailAndPassword(
+        auth,
+        cleanEmail,
         password
       );
 
-      onSuccess(user);
-    } catch (error: any) {
-      console.error(error);
+      onSuccess();
+    } catch (error: unknown) {
+      const firebaseError = error as {
+        code?: string;
+        message?: string;
+      };
 
-      switch (error?.code) {
-        case "auth/invalid-credential":
-          setError("Incorrect email or password.");
+      switch (firebaseError.code) {
+        case "auth/invalid-email":
+          setError("Please enter a valid email address.");
           break;
 
         case "auth/user-not-found":
@@ -59,34 +71,57 @@ export default function LoginForm({
           break;
 
         case "auth/wrong-password":
-          setError("Incorrect password.");
+          setError("Incorrect password. Please try again.");
           break;
 
-        case "auth/invalid-email":
-          setError("Please enter a valid email address.");
+        case "auth/invalid-credential":
+          setError("Incorrect email or password.");
           break;
 
         case "auth/too-many-requests":
           setError(
-            "Too many attempts. Please try again later."
+            "Too many unsuccessful attempts. Please try again later."
+          );
+          break;
+
+        case "auth/user-disabled":
+          setError(
+            "This account has been disabled. Please contact support."
+          );
+          break;
+
+        case "auth/network-request-failed":
+          setError(
+            "Network error. Please check your internet connection."
           );
           break;
 
         default:
           setError(
-            error?.message ||
+            firebaseError.message ||
               "Unable to sign in. Please try again."
           );
       }
     } finally {
       setLoading(false);
     }
-  }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch {
+      // Ignore logout errors here.
+    }
+  };
 
   return (
     <div className="auth-card">
       <div className="auth-logo-area">
         <div className="sf-logo">
+          <div className="sf-ring" />
+          <div className="sf-ring-two" />
+          <div className="sf-shine" />
           <span>SF</span>
         </div>
 
@@ -102,91 +137,106 @@ export default function LoginForm({
         Sign in to continue to Social freeText
       </p>
 
-      {error && (
-        <div className="auth-error">
-          {error}
-        </div>
-      )}
+      <form onSubmit={submitLogin}>
+        <div className="form-group">
+          <label htmlFor="login-email">
+            Email address
+          </label>
 
-      <div className="form-group">
-        <label>Email address</label>
+          <div className="input-wrapper">
+            <Mail size={19} />
 
-        <div className="input-wrapper">
-          <Mail size={19} />
-
-          <input
-            type="email"
-            placeholder="Enter your email"
-            value={email}
-            onChange={(event) =>
-              setEmail(event.target.value)
-            }
-            autoComplete="email"
-          />
-        </div>
-      </div>
-
-      <div className="form-group">
-        <label>Password</label>
-
-        <div className="input-wrapper">
-          <Lock size={19} />
-
-          <input
-            type={showPassword ? "text" : "password"}
-            placeholder="Enter your password"
-            value={password}
-            onChange={(event) =>
-              setPassword(event.target.value)
-            }
-            autoComplete="current-password"
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                submitLogin();
+            <input
+              id="login-email"
+              type="email"
+              placeholder="Enter your email"
+              value={email}
+              onChange={(event) =>
+                setEmail(event.target.value)
               }
-            }}
-          />
-
-          <button
-            type="button"
-            className="input-icon-button"
-            onClick={() =>
-              setShowPassword(!showPassword)
-            }
-          >
-            {showPassword ? (
-              <EyeOff size={19} />
-            ) : (
-              <Eye size={19} />
-            )}
-          </button>
+              autoComplete="email"
+              disabled={loading}
+            />
+          </div>
         </div>
-      </div>
 
-      <button
-        className="forgot-button"
-        onClick={onForgotPassword}
-      >
-        Forgot password?
-      </button>
+        <div className="form-group">
+          <label htmlFor="login-password">
+            Password
+          </label>
 
-      <button
-        className="primary-button"
-        onClick={submitLogin}
-        disabled={loading}
-      >
-        {loading ? "Signing in..." : "Sign In"}
+          <div className="input-wrapper">
+            <Lock size={19} />
 
-        {!loading && <ArrowRight size={19} />}
-      </button>
+            <input
+              id="login-password"
+              type={showPassword ? "text" : "password"}
+              placeholder="Enter your password"
+              value={password}
+              onChange={(event) =>
+                setPassword(event.target.value)
+              }
+              autoComplete="current-password"
+              disabled={loading}
+            />
+
+            <button
+              type="button"
+              className="input-icon-button"
+              onClick={() =>
+                setShowPassword((current) => !current)
+              }
+              aria-label={
+                showPassword
+                  ? "Hide password"
+                  : "Show password"
+              }
+              disabled={loading}
+            >
+              {showPassword ? (
+                <EyeOff size={19} />
+              ) : (
+                <Eye size={19} />
+              )}
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="auth-error" role="alert">
+            {error}
+          </div>
+        )}
+
+        <button
+          type="button"
+          className="forgot-button"
+          onClick={onForgotPassword}
+          disabled={loading}
+        >
+          Forgot password?
+        </button>
+
+        <button
+          type="submit"
+          className="primary-button"
+          disabled={loading}
+        >
+          {loading ? "Signing in..." : "Sign In"}
+
+          {!loading && <ArrowRight size={19} />}
+        </button>
+      </form>
 
       <div className="divider">
         <span>OR</span>
       </div>
 
       <button
+        type="button"
         className="secondary-button"
-        onClick={onSignup}
+        onClick={onCreateAccount}
+        disabled={loading}
       >
         Create New Account
       </button>
