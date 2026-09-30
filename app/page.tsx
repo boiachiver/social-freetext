@@ -20,14 +20,16 @@ type Screen =
   | "home";
 
 export default function HomePage() {
-  const [screen, setScreen] =
-    useState<Screen>("login");
+  const [screen, setScreen] = useState<Screen>("login");
 
   const [user, setUser] =
     useState<FirebaseUser | null>(null);
 
   const [loading, setLoading] = useState(true);
 
+  /*
+   * FIREBASE AUTH LISTENER
+   */
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(
       auth,
@@ -47,30 +49,41 @@ export default function HomePage() {
     return () => unsubscribe();
   }, []);
 
+  /*
+   * LOGOUT
+   */
   async function logout() {
     try {
       await signOut();
       setUser(null);
       setScreen("login");
     } catch (error) {
-      console.error(
-        "Logout failed:",
-        error
-      );
+      console.error("Logout failed:", error);
     }
   }
 
+  /*
+   * LOADING SCREEN
+   */
   if (loading) {
     return (
       <main className="auth-page">
+        <div className="auth-background-glow glow-one" />
+        <div className="auth-background-glow glow-two" />
+
         <div className="auth-card">
           <div className="auth-logo-area">
             <div className="sf-logo">
+              <div className="sf-ring" />
+              <div className="sf-ring-two" />
+              <div className="sf-shine" />
+
               <span>SF</span>
             </div>
 
             <div className="auth-brand-name">
               <strong>Social freeText</strong>
+
               <span>
                 Connect. Chat. Share.
               </span>
@@ -87,6 +100,9 @@ export default function HomePage() {
     );
   }
 
+  /*
+   * LOGIN
+   */
   if (screen === "login") {
     return (
       <main className="auth-page">
@@ -94,21 +110,23 @@ export default function HomePage() {
         <div className="auth-background-glow glow-two" />
 
         <LoginForm
-          onSignup={() =>
-            setScreen("signup")
-          }
-          onForgotPassword={() =>
-            setScreen("forgot")
-          }
-          onSuccess={(firebaseUser) => {
-            setUser(firebaseUser);
+          onSuccess={() => {
             setScreen("home");
+          }}
+          onForgotPassword={() => {
+            setScreen("forgot");
+          }}
+          onCreateAccount={() => {
+            setScreen("signup");
           }}
         />
       </main>
     );
   }
 
+  /*
+   * SIGNUP
+   */
   if (screen === "signup") {
     return (
       <main className="auth-page">
@@ -116,11 +134,10 @@ export default function HomePage() {
         <div className="auth-background-glow glow-two" />
 
         <SignupForm
-          onLogin={() =>
-            setScreen("login")
-          }
-          onSuccess={(firebaseUser) => {
-            setUser(firebaseUser);
+          onLogin={() => {
+            setScreen("login");
+          }}
+          onSuccess={() => {
             setScreen("home");
           }}
         />
@@ -128,6 +145,9 @@ export default function HomePage() {
     );
   }
 
+  /*
+   * FORGOT PASSWORD
+   */
   if (screen === "forgot") {
     return (
       <main className="auth-page">
@@ -135,16 +155,20 @@ export default function HomePage() {
         <div className="auth-background-glow glow-two" />
 
         <ForgotPassword
-          onBack={() =>
-            setScreen("login")
-          }
+          onBack={() => {
+            setScreen("login");
+          }}
         />
       </main>
     );
   }
 
+  /*
+   * MAIN APP
+   */
   return (
     <main className="app-shell">
+      {/* HEADER */}
       <header className="top-header">
         <div className="brand-mini">
           <div className="brand-mini-logo">
@@ -178,8 +202,11 @@ export default function HomePage() {
         </div>
       </header>
 
+      {/* MAIN CONTENT */}
       <main className="main-content">
         <div className="content-container">
+
+          {/* PAGE HEADING */}
           <div className="page-heading">
             <div>
               <h1>
@@ -196,8 +223,10 @@ export default function HomePage() {
             </div>
           </div>
 
+          {/* SUCCESS CARD */}
           <div className="composer-card">
             <div className="composer-main">
+
               <h2>
                 You're successfully
                 signed in 🎉
@@ -212,9 +241,18 @@ export default function HomePage() {
               <p>
                 Account:{" "}
                 <strong>
-                  {user?.email}
+                  {user?.email || "Unknown"}
                 </strong>
               </p>
+
+              {user?.displayName && (
+                <p>
+                  Name:{" "}
+                  <strong>
+                    {user.displayName}
+                  </strong>
+                </p>
+              )}
 
               <button
                 className="primary-button"
@@ -222,8 +260,10 @@ export default function HomePage() {
               >
                 Log out
               </button>
+
             </div>
           </div>
+
         </div>
       </main>
     </main>
