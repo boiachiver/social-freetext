@@ -13,23 +13,13 @@ import LoginForm from "@/components/auth/LoginForm";
 import SignupForm from "@/components/auth/SignupForm";
 import ForgotPassword from "@/components/auth/ForgotPassword";
 
-type Screen =
-  | "login"
-  | "signup"
-  | "forgot"
-  | "home";
+type Screen = "login" | "signup" | "forgot" | "home";
 
 export default function HomePage() {
   const [screen, setScreen] = useState<Screen>("login");
-
-  const [user, setUser] =
-    useState<FirebaseUser | null>(null);
-
+  const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  /*
-   * FIREBASE AUTH LISTENER
-   */
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(
       auth,
@@ -49,9 +39,6 @@ export default function HomePage() {
     return () => unsubscribe();
   }, []);
 
-  /*
-   * LOGOUT
-   */
   async function logout() {
     try {
       await signOut();
@@ -62,31 +49,18 @@ export default function HomePage() {
     }
   }
 
-  /*
-   * LOADING SCREEN
-   */
   if (loading) {
     return (
       <main className="auth-page">
-        <div className="auth-background-glow glow-one" />
-        <div className="auth-background-glow glow-two" />
-
         <div className="auth-card">
           <div className="auth-logo-area">
             <div className="sf-logo">
-              <div className="sf-ring" />
-              <div className="sf-ring-two" />
-              <div className="sf-shine" />
-
               <span>SF</span>
             </div>
 
             <div className="auth-brand-name">
               <strong>Social freeText</strong>
-
-              <span>
-                Connect. Chat. Share.
-              </span>
+              <span>Connect. Chat. Share.</span>
             </div>
           </div>
 
@@ -103,6 +77,7 @@ export default function HomePage() {
   /*
    * LOGIN
    */
+
   if (screen === "login") {
     return (
       <main className="auth-page">
@@ -127,6 +102,7 @@ export default function HomePage() {
   /*
    * SIGNUP
    */
+
   if (screen === "signup") {
     return (
       <main className="auth-page">
@@ -134,11 +110,11 @@ export default function HomePage() {
         <div className="auth-background-glow glow-two" />
 
         <SignupForm
-          onLogin={() => {
-            setScreen("login");
-          }}
           onSuccess={() => {
             setScreen("home");
+          }}
+          onLogin={() => {
+            setScreen("login");
           }}
         />
       </main>
@@ -148,6 +124,7 @@ export default function HomePage() {
   /*
    * FORGOT PASSWORD
    */
+
   if (screen === "forgot") {
     return (
       <main className="auth-page">
@@ -164,25 +141,18 @@ export default function HomePage() {
   }
 
   /*
-   * MAIN APP
+   * HOME
    */
+
   return (
     <main className="app-shell">
-      {/* HEADER */}
       <header className="top-header">
         <div className="brand-mini">
-          <div className="brand-mini-logo">
-            SF
-          </div>
+          <div className="brand-mini-logo">SF</div>
 
           <div>
-            <strong>
-              Social freeText
-            </strong>
-
-            <span>
-              Connect. Chat. Share.
-            </span>
+            <strong>Social freeText</strong>
+            <span>Connect. Chat. Share.</span>
           </div>
         </div>
 
@@ -202,11 +172,8 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* MAIN CONTENT */}
       <main className="main-content">
         <div className="content-container">
-
-          {/* PAGE HEADING */}
           <div className="page-heading">
             <div>
               <h1>
@@ -223,36 +190,23 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* SUCCESS CARD */}
           <div className="composer-card">
             <div className="composer-main">
-
               <h2>
-                You're successfully
-                signed in 🎉
+                You're successfully signed in 🎉
               </h2>
 
               <p>
-                Your Firebase authentication
-                is now connected to Social
-                freeText.
+                Your Firebase authentication is now
+                connected to Social freeText.
               </p>
 
               <p>
                 Account:{" "}
                 <strong>
-                  {user?.email || "Unknown"}
+                  {user?.email || "No email"}
                 </strong>
               </p>
-
-              {user?.displayName && (
-                <p>
-                  Name:{" "}
-                  <strong>
-                    {user.displayName}
-                  </strong>
-                </p>
-              )}
 
               <button
                 className="primary-button"
@@ -260,10 +214,8 @@ export default function HomePage() {
               >
                 Log out
               </button>
-
             </div>
           </div>
-
         </div>
       </main>
     </main>
