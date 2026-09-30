@@ -1,6 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { FormEvent, useState } from "react";
+import {
+  createUserWithEmailAndPassword,
+  updateProfile,
+} from "firebase/auth";
 import {
   ArrowRight,
   Eye,
@@ -10,41 +14,45 @@ import {
   User,
 } from "lucide-react";
 
-import { handleSignup } from "@/lib/auth";
+import { auth } from "@/lib/firebase";
 
 type SignupFormProps = {
+  onSuccess: () => void;
   onLogin: () => void;
-  onSuccess: (user: any, name: string, username: string) => void;
 };
 
 export default function SignupForm({
-  onLogin,
   onSuccess,
+  onLogin,
 }: SignupFormProps) {
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
-
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] =
-    useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
-  const [showPassword, setShowPassword] =
-    useState(false);
-
+  const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] =
     useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  async function submitSignup() {
+  const submitSignup = async (
+    event: FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+
     setError("");
 
+    const cleanName = name.trim();
+    const cleanUsername = username.trim().toLowerCase();
+    const cleanEmail = email.trim().toLowerCase();
+
     if (
-      !name.trim() ||
-      !username.trim() ||
-      !email.trim() ||
+      !cleanName ||
+      !cleanUsername ||
+      !cleanEmail ||
       !password ||
       !confirmPassword
     ) {
@@ -52,10 +60,13 @@ export default function SignupForm({
       return;
     }
 
+    if (cleanUsername.length < 3) {
+      setError("Username must contain at least 3 characters.");
+      return;
+    }
+
     if (password.length < 6) {
-      setError(
-        "Password must contain at least 6 characters."
-      );
+      setError("Password must contain at least 6 characters.");
       return;
     }
 
@@ -64,27 +75,31 @@ export default function SignupForm({
       return;
     }
 
+    setLoading(true);
+
     try {
-      setLoading(true);
+      const userCredential =
+        await createUserWithEmailAndPassword(
+          auth,
+          cleanEmail,
+          password
+        );
 
-      const user = await handleSignup(
-        email.trim(),
-        password,
-        name.trim()
-      );
+      await updateProfile(userCredential.user, {
+        displayName: cleanName,
+      });
 
-      onSuccess(
-        user,
-        name.trim(),
-        username.trim().toLowerCase()
-      );
-    } catch (error: any) {
-      console.error(error);
+      onSuccess();
+    } catch (error: unknown) {
+      const firebaseError = error as {
+        code?: string;
+        message?: string;
+      };
 
-      switch (error?.code) {
+      switch (firebaseError.code) {
         case "auth/email-already-in-use":
           setError(
-            "An account already exists with this email."
+            "An account with this email already exists."
           );
           break;
 
@@ -93,31 +108,41 @@ export default function SignupForm({
           break;
 
         case "auth/weak-password":
-          setError("Your password is too weak.");
+          setError(
+            "Your password is too weak. Please choose a stronger password."
+          );
+          break;
+
+        case "auth/network-request-failed":
+          setError(
+            "Network error. Please check your internet connection."
+          );
+          break;
+
+        case "auth/operation-not-allowed":
+          setError(
+            "Email/password authentication is not enabled in Firebase."
+          );
           break;
 
         default:
           setError(
-            error?.message ||
-              "Unable to create your account."
+            firebaseError.message ||
+              "Unable to create your account. Please try again."
           );
       }
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="auth-card signup-card">
-      <button
-        className="back-button"
-        onClick={onLogin}
-      >
-        ← Back to login
-      </button>
-
       <div className="auth-logo-area">
         <div className="sf-logo">
+          <div className="sf-ring" />
+          <div className="sf-ring-two" />
+          <div className="sf-shine" />
           <span>SF</span>
         </div>
 
@@ -133,154 +158,185 @@ export default function SignupForm({
         Join Social freeText and connect with everyone
       </p>
 
-      {error && (
-        <div className="auth-error">
-          {error}
+      <form onSubmit={submitSignup}>
+        <div className="form-group">
+          <label htmlFor="signup-name">Full name</label>
+
+          <div className="input-wrapper">
+            <User size={19} />
+
+            <input
+              id="signup-name"
+              type="text"
+              placeholder="Your full name"
+              value={name}
+              onChange={(event) =>
+                setName(event.target.value)
+              }
+              autoComplete="name"
+              disabled={loading}
+            />
+          </div>
         </div>
-      )}
 
-      <div className="form-group">
-        <label>Full name</label>
+        <div className="form-group">
+          <label htmlFor="signup-username">
+            Username
+          </label>
 
-        <div className="input-wrapper">
-          <User size={19} />
+          <div className="input-wrapper">
+            <span className="username-symbol">@</span>
 
-          <input
-            type="text"
-            placeholder="Your full name"
-            value={name}
-            onChange={(event) =>
-              setName(event.target.value)
-            }
-          />
+            <input
+              id="signup-username"
+              type="text"
+              placeholder="Choose a username"
+              value={username}
+              onChange={(event) =>
+                setUsername(
+                  event.target.value
+                    .toLowerCase()
+                    .replace(/[^a-z0-9_]/g, "")
+                )
+              }
+              autoComplete="username"
+              disabled={loading}
+            />
+          </div>
         </div>
-      </div>
 
-      <div className="form-group">
-        <label>Username</label>
+        <div className="form-group">
+          <label htmlFor="signup-email">
+            Email address
+          </label>
 
-        <div className="input-wrapper">
-          <span className="username-symbol">
-            @
-          </span>
+          <div className="input-wrapper">
+            <Mail size={19} />
 
-          <input
-            type="text"
-            placeholder="Choose a username"
-            value={username}
-            onChange={(event) =>
-              setUsername(
-                event.target.value
-                  .toLowerCase()
-                  .replace(/\s/g, "")
-              )
-            }
-          />
+            <input
+              id="signup-email"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(event) =>
+                setEmail(event.target.value)
+              }
+              autoComplete="email"
+              disabled={loading}
+            />
+          </div>
         </div>
-      </div>
 
-      <div className="form-group">
-        <label>Email address</label>
+        <div className="form-group">
+          <label htmlFor="signup-password">
+            Password
+          </label>
 
-        <div className="input-wrapper">
-          <Mail size={19} />
+          <div className="input-wrapper">
+            <Lock size={19} />
 
-          <input
-            type="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(event) =>
-              setEmail(event.target.value)
-            }
-            autoComplete="email"
-          />
+            <input
+              id="signup-password"
+              type={showPassword ? "text" : "password"}
+              placeholder="At least 6 characters"
+              value={password}
+              onChange={(event) =>
+                setPassword(event.target.value)
+              }
+              autoComplete="new-password"
+              disabled={loading}
+            />
+
+            <button
+              type="button"
+              className="input-icon-button"
+              onClick={() =>
+                setShowPassword((current) => !current)
+              }
+              disabled={loading}
+            >
+              {showPassword ? (
+                <EyeOff size={19} />
+              ) : (
+                <Eye size={19} />
+              )}
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div className="form-group">
-        <label>Password</label>
+        <div className="form-group">
+          <label htmlFor="signup-confirm-password">
+            Confirm password
+          </label>
 
-        <div className="input-wrapper">
-          <Lock size={19} />
+          <div className="input-wrapper">
+            <Lock size={19} />
 
-          <input
-            type={showPassword ? "text" : "password"}
-            placeholder="At least 6 characters"
-            value={password}
-            onChange={(event) =>
-              setPassword(event.target.value)
-            }
-            autoComplete="new-password"
-          />
+            <input
+              id="signup-confirm-password"
+              type={
+                showConfirmPassword
+                  ? "text"
+                  : "password"
+              }
+              placeholder="Repeat your password"
+              value={confirmPassword}
+              onChange={(event) =>
+                setConfirmPassword(event.target.value)
+              }
+              autoComplete="new-password"
+              disabled={loading}
+            />
 
-          <button
-            type="button"
-            className="input-icon-button"
-            onClick={() =>
-              setShowPassword(!showPassword)
-            }
-          >
-            {showPassword ? (
-              <EyeOff size={19} />
-            ) : (
-              <Eye size={19} />
-            )}
-          </button>
+            <button
+              type="button"
+              className="input-icon-button"
+              onClick={() =>
+                setShowConfirmPassword(
+                  (current) => !current
+                )
+              }
+              disabled={loading}
+            >
+              {showConfirmPassword ? (
+                <EyeOff size={19} />
+              ) : (
+                <Eye size={19} />
+              )}
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div className="form-group">
-        <label>Confirm password</label>
+        {error && (
+          <div className="auth-error" role="alert">
+            {error}
+          </div>
+        )}
 
-        <div className="input-wrapper">
-          <Lock size={19} />
+        <button
+          type="submit"
+          className="primary-button"
+          disabled={loading}
+        >
+          {loading ? "Creating account..." : "Create Account"}
 
-          <input
-            type={
-              showConfirmPassword
-                ? "text"
-                : "password"
-            }
-            placeholder="Repeat your password"
-            value={confirmPassword}
-            onChange={(event) =>
-              setConfirmPassword(event.target.value)
-            }
-            autoComplete="new-password"
-          />
-
-          <button
-            type="button"
-            className="input-icon-button"
-            onClick={() =>
-              setShowConfirmPassword(
-                !showConfirmPassword
-              )
-            }
-          >
-            {showConfirmPassword ? (
-              <EyeOff size={19} />
-            ) : (
-              <Eye size={19} />
-            )}
-          </button>
-        </div>
-      </div>
-
-      <button
-        className="primary-button"
-        onClick={submitSignup}
-        disabled={loading}
-      >
-        {loading ? "Creating account..." : "Create Account"}
-
-        {!loading && <ArrowRight size={19} />}
-      </button>
+          {!loading && <ArrowRight size={19} />}
+        </button>
+      </form>
 
       <p className="terms-text">
-        By creating an account, you agree to our
-        Terms and Privacy Policy.
+        By creating an account, you agree to our Terms
+        and Privacy Policy.
       </p>
+
+      <button
+        type="button"
+        className="secondary-button"
+        onClick={onLogin}
+        disabled={loading}
+      >
+        Already have an account? Sign In
+      </button>
 
       <div className="auth-footer">
         Powered by <strong>Boi AchiverAI</strong>
