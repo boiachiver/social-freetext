@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowLeft, Mail, Send } from "lucide-react";
+import { FormEvent, useState } from "react";
+import { sendPasswordResetEmail } from "firebase/auth";
+import {
+  ArrowLeft,
+  Mail,
+  Send,
+} from "lucide-react";
 
-import { handlePasswordReset } from "@/lib/auth";
+import { auth } from "@/lib/firebase";
 
 type ForgotPasswordProps = {
   onBack: () => void;
@@ -14,47 +19,81 @@ export default function ForgotPassword({
 }: ForgotPasswordProps) {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
 
-  async function resetPassword() {
-    setMessage("");
-    setError("");
+  const submitReset = async (
+    event: FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
 
-    if (!email.trim()) {
+    setError("");
+    setSuccess("");
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanEmail) {
       setError("Please enter your email address.");
       return;
     }
 
+    setLoading(true);
+
     try {
-      setLoading(true);
+      await sendPasswordResetEmail(auth, cleanEmail);
 
-      await handlePasswordReset(email.trim());
-
-      setMessage(
-        "Password reset email sent. Check your inbox."
+      setSuccess(
+        "Password reset email sent. Please check your inbox."
       );
-    } catch (error: any) {
-      console.error(error);
 
-      if (error?.code === "auth/invalid-email") {
-        setError("Please enter a valid email address.");
-      } else {
-        setError(
-          error?.message ||
-            "Unable to send the reset email."
-        );
+      setEmail("");
+    } catch (error: unknown) {
+      const firebaseError = error as {
+        code?: string;
+        message?: string;
+      };
+
+      switch (firebaseError.code) {
+        case "auth/invalid-email":
+          setError("Please enter a valid email address.");
+          break;
+
+        case "auth/user-not-found":
+          setError(
+            "No account was found with this email address."
+          );
+          break;
+
+        case "auth/network-request-failed":
+          setError(
+            "Network error. Please check your internet connection."
+          );
+          break;
+
+        case "auth/too-many-requests":
+          setError(
+            "Too many requests. Please try again later."
+          );
+          break;
+
+        default:
+          setError(
+            firebaseError.message ||
+              "Unable to send the reset email. Please try again."
+          );
       }
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="auth-card">
       <button
+        type="button"
         className="back-button"
         onClick={onBack}
+        disabled={loading}
       >
         <ArrowLeft size={20} />
         Back to login
@@ -62,6 +101,9 @@ export default function ForgotPassword({
 
       <div className="auth-logo-area">
         <div className="sf-logo">
+          <div className="sf-ring" />
+          <div className="sf-ring-two" />
+          <div className="sf-shine" />
           <span>SF</span>
         </div>
 
@@ -74,51 +116,55 @@ export default function ForgotPassword({
       <h1>Reset password</h1>
 
       <p className="auth-subtitle">
-        Enter your email and we'll send you a password
-        reset link.
+        Enter your email and we'll send you a link to
+        reset your password.
       </p>
 
-      {error && (
-        <div className="auth-error">
-          {error}
+      <form onSubmit={submitReset}>
+        <div className="form-group">
+          <label htmlFor="reset-email">
+            Email address
+          </label>
+
+          <div className="input-wrapper">
+            <Mail size={19} />
+
+            <input
+              id="reset-email"
+              type="email"
+              placeholder="Enter your email"
+              value={email}
+              onChange={(event) =>
+                setEmail(event.target.value)
+              }
+              autoComplete="email"
+              disabled={loading}
+            />
+          </div>
         </div>
-      )}
 
-      {message && (
-        <div className="auth-success">
-          {message}
-        </div>
-      )}
+        {error && (
+          <div className="auth-error" role="alert">
+            {error}
+          </div>
+        )}
 
-      <div className="form-group">
-        <label>Email address</label>
+        {success && (
+          <div className="auth-success" role="status">
+            {success}
+          </div>
+        )}
 
-        <div className="input-wrapper">
-          <Mail size={19} />
+        <button
+          type="submit"
+          className="primary-button"
+          disabled={loading}
+        >
+          {loading ? "Sending..." : "Send Reset Link"}
 
-          <input
-            type="email"
-            placeholder="Enter your email"
-            value={email}
-            onChange={(event) =>
-              setEmail(event.target.value)
-            }
-            autoComplete="email"
-          />
-        </div>
-      </div>
-
-      <button
-        className="primary-button"
-        onClick={resetPassword}
-        disabled={loading}
-      >
-        {loading
-          ? "Sending..."
-          : "Send Reset Link"}
-
-        {!loading && <Send size={19} />}
-      </button>
+          {!loading && <Send size={19} />}
+        </button>
+      </form>
 
       <div className="auth-footer">
         Powered by <strong>Boi AchiverAI</strong>
